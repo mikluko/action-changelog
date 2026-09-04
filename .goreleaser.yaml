@@ -1,0 +1,24 @@
+version: 2
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags: [-s -w]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+
+archives:
+  # script/install.sh builds this name from uname, so it is pinned here rather
+  # than left to the default, which carries the version.
+  - name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true

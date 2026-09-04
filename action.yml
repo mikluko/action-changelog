@@ -19,14 +19,28 @@ inputs:
       Changelog six: Added, Changed, Deprecated, Removed, Fixed, Security.
     required: false
     default: ""
+  version:
+    description: >-
+      Release of this action to run. Empty resolves the ref the workflow named
+      in `uses:`, falling back to the VERSION file committed beside this file.
+    required: false
+    default: ""
 
 runs:
-  using: docker
-  # The tag names the version CHANGELOG.md's newest released entry names, and is
-  # written in the release pull request rather than after the tag exists.
-  # TestActionPinsTheChangelogVersion enforces the pair.
-  image: docker://ghcr.io/mikluko/action-changelog:v0.1.0
-  args:
-    - -validate=${{ inputs.validate }}
-    - -changelog=${{ inputs.changelog }}
-    - -sections=${{ inputs.sections }}
+  using: composite
+  steps:
+    - name: Install action-changelog
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        ACTION_PATH: ${{ github.action_path }}
+        ACTION_REF: ${{ github.action_ref }}
+      run: "$ACTION_PATH/script/install.sh"
+
+    - name: Validate the changelog
+      shell: bash
+      run: |
+        action-changelog \
+          -validate="${{ inputs.validate }}" \
+          -changelog="${{ inputs.changelog }}" \
+          -sections="${{ inputs.sections }}"

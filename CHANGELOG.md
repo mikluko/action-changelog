@@ -15,8 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   emitting each finding as a workflow annotation under GitHub Actions.
 - `-sections` accepts a level-3 heading vocabulary other than the Keep a
   Changelog six.
-- A Docker container action packaging the validator as
-  `ghcr.io/mikluko/action-changelog`.
+- A composite action packaging the validator, running on Linux, macOS and
+  Windows runners from a checksum-verified release archive.
 
 [Unreleased]: https://github.com/mikluko/action-changelog/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/mikluko/action-changelog/releases/tag/v0.1.0

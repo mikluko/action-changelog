@@ -5,39 +5,22 @@ import (
 	"strings"
 	"testing"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/mikluko/action-changelog/internal/changelog"
 )
 
-// imageRepository is the reference action.yml pins, up to and including the
-// colon that introduces the tag.
-const imageRepository = "docker://ghcr.io/mikluko/action-changelog:"
-
-// TestActionPinsTheChangelogVersion holds action.yml's image tag to the version
+// TestVersionMatchesTheChangelog holds the VERSION file to the version
 // CHANGELOG.md names.
 //
-// A Docker container action is resolved from the action.yml committed at the
-// ref a consumer names, so the file tagged v1.2.3 has to already pin v1.2.3.
-// Nothing about the tag can enforce that after the fact, which is why the pair
-// is written before the release and checked here.
-func TestActionPinsTheChangelogVersion(t *testing.T) {
-	var action struct {
-		Runs struct {
-			Image string `yaml:"image"`
-		} `yaml:"runs"`
-	}
-	src, err := os.ReadFile("action.yml")
+// VERSION is what script/install.sh downloads when a workflow pins this action
+// by SHA rather than by tag, so the file committed at v1.2.3 has to already
+// name v1.2.3. Nothing about the tag can enforce that after the fact, which is
+// why the pair is written before the release and checked here.
+func TestVersionMatchesTheChangelog(t *testing.T) {
+	src, err := os.ReadFile("VERSION")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := yaml.Unmarshal(src, &action); err != nil {
-		t.Fatal(err)
-	}
-	ref, ok := strings.CutPrefix(action.Runs.Image, imageRepository)
-	if !ok {
-		t.Fatalf("action.yml pins %q, which is not %s<tag>", action.Runs.Image, imageRepository)
-	}
+	pinned := strings.TrimSpace(string(src))
 
 	src, err = os.ReadFile("CHANGELOG.md")
 	if err != nil {
@@ -47,14 +30,15 @@ func TestActionPinsTheChangelogVersion(t *testing.T) {
 	if !ok {
 		t.Fatal("CHANGELOG.md names no released version")
 	}
-	if ref != latest.Version {
-		t.Errorf("action.yml pins %s, CHANGELOG.md's newest released entry is %s", ref, latest.Version)
+	if pinned != latest.Version {
+		t.Errorf("VERSION is %s, CHANGELOG.md's newest released entry is %s", pinned, latest.Version)
 	}
 
-	// Under the release workflow the tag being cut joins the pair: it is the
-	// image tag that will exist, so a mismatch publishes an image no consumer
-	// of that tag can resolve. Locally there is no tag and nothing to check.
-	if tag := os.Getenv("GITHUB_REF_NAME"); tag != "" && strings.HasPrefix(tag, "v") && tag != ref {
-		t.Errorf("the tag being cut is %s, action.yml pins %s", tag, ref)
+	// Under the release workflow the tag being cut joins the pair: it names the
+	// release assets install.sh will ask for, so a mismatch publishes a release
+	// that the VERSION committed inside it does not point at. Locally there is
+	// no tag and nothing to check.
+	if tag := os.Getenv("GITHUB_REF_NAME"); strings.HasPrefix(tag, "v") && tag != pinned {
+		t.Errorf("the tag being cut is %s, VERSION is %s", tag, pinned)
 	}
 }
