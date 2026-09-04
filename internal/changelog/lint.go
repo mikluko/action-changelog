@@ -1,0 +1,101 @@
+package changelog
+
+import (
+	"fmt"
+
+	"golang.org/x/mod/semver"
+)
+
+// Finding is one departure from the format, addressed to the line that carries
+// it so a caller can annotate a diff.
+type Finding struct {
+	Line int
+	Msg  string
+}
+
+func (f Finding) String() string { return fmt.Sprintf("%d: %s", f.Line, f.Msg) }
+
+// DefaultSections is the vocabulary Keep a Changelog mandates, unchanged between
+// 1.1.0 and 2.0.0.
+//
+// Breaking is deliberately absent: 2.0.0 marks a breaking change inline as
+// "**Breaking:**" inside the section it belongs to, which keeps the grouping a
+// dedicated section would discard. Repositories that already use it as a heading
+// pass it to Lint rather than the default.
+var DefaultSections = []string{
+	"Added", "Changed", "Deprecated", "Removed", "Fixed", "Security",
+}
+
+// Lint reports every way c departs from the format, in document order.
+//
+// sections is the accepted set of level-3 headings; DefaultSections is used when
+// it is empty. An empty result means the document is well formed, not that its
+// newest entry is releasable: whether that version is a legal step past what is
+// already tagged is a question about the repository, not about the file.
+func (c *Changelog) Lint(sections []string) []Finding {
+	if len(sections) == 0 {
+		sections = DefaultSections
+	}
+	allowed := make(map[string]bool, len(sections))
+	for _, s := range sections {
+		allowed[s] = true
+	}
+
+	var (
+		out  []Finding
+		prev Entry
+	)
+	for _, e := range c.Entries {
+		switch {
+		case e.Unreleased:
+		case e.Version == "":
+			out = append(out, Finding{e.Line, fmt.Sprintf(
+				"heading %q is neither [Unreleased] nor a version and date, as in [1.2.3] - 2006-01-02", e.Raw)})
+		default:
+			if e.Date == "" {
+				out = append(out, Finding{e.Line, fmt.Sprintf(
+					"version %s carries no date; write it as [%s] - 2006-01-02",
+					e.Version[1:], e.Version[1:])})
+			} else if !isDate(e.Date) {
+				out = append(out, Finding{e.Line, fmt.Sprintf(
+					"date %q is not YYYY-MM-DD", e.Date)})
+			}
+			if prev.Version != "" && semver.Compare(e.Version, prev.Version) >= 0 {
+				out = append(out, Finding{e.Line, fmt.Sprintf(
+					"version %s does not come before %s, which is above it; entries run newest first",
+					e.Version[1:], prev.Version[1:])})
+			}
+			if e.Body == "" {
+				out = append(out, Finding{e.Line, fmt.Sprintf(
+					"version %s has no entries under it", e.Version[1:])})
+			}
+			prev = e
+		}
+		for _, s := range e.Sections {
+			if !allowed[s.Name] {
+				out = append(out, Finding{s.Line, fmt.Sprintf(
+					"section %q is not one of %v", s.Name, sections)})
+			}
+		}
+	}
+	return out
+}
+
+// isDate reports whether s is a YYYY-MM-DD calendar date.
+//
+// The check is on shape rather than on validity as an instant: a changelog dated
+// in the future is a decision this package does not make.
+func isDate(s string) bool {
+	if len(s) != 10 || s[4] != '-' || s[7] != '-' {
+		return false
+	}
+	for i, r := range s {
+		if i == 4 || i == 7 {
+			continue
+		}
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
