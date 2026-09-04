@@ -1,0 +1,35 @@
+name: Changelog
+description: Read a Keep a Changelog document and report where it departs from the format.
+branding:
+  icon: check-square
+  color: purple
+
+inputs:
+  changelog:
+    description: Path to the changelog, relative to the workspace.
+    required: false
+    default: CHANGELOG.md
+  validate:
+    description: Report where the changelog departs from the format.
+    required: false
+    default: "true"
+  sections:
+    description: >-
+      Comma-separated level-3 headings to accept. Empty accepts the Keep a
+      Changelog six: Added, Changed, Deprecated, Removed, Fixed, Security.
+    required: false
+    default: ""
+
+runs:
+  using: docker
+  # The tag is the release this file was committed in, which is what VERSION
+  # names and what TestVersionMatchesTheChangelog holds to the tag being cut. A
+  # workflow pinning this action by SHA therefore runs the image built for the
+  # release that commit belongs to, with nothing rewritten after the fact.
+  image: docker://ghcr.io/mikluko/action-changelog:v0.1.0
+  # args is argv and never a shell line, so an input carrying a quote is one
+  # argument rather than the end of one.
+  args:
+    - -validate=${{ inputs.validate }}
+    - -changelog=${{ inputs.changelog }}
+    - -sections=${{ inputs.sections }}
