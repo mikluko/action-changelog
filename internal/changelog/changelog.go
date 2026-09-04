@@ -35,6 +35,10 @@ type Entry struct {
 	Sections   []Section
 	Body       string
 	Line       int
+	// LinkRef reports whether the document defines a link reference matching
+	// this entry's bracketed heading token, which is what decides whether the
+	// heading renders as a live link or as literal "[1.2.3]" text.
+	LinkRef bool
 }
 
 // Changelog is a parsed document. Entries keep document order, so the first
@@ -103,6 +107,7 @@ func Parse(src []byte) *Changelog {
 		}
 	}
 
+	defined := linkRefs(root)
 	for i, h := range headings {
 		var next ast.Node
 		if i+1 < len(headings) {
@@ -114,9 +119,43 @@ func Parse(src []byte) *Changelog {
 		}
 		e.Version, e.Date, e.Unreleased = parseHeading(e.Raw)
 		e.Sections, e.Body = collect(src, h, next)
+		if label, bracketed := headingLabel(e.Raw); bracketed {
+			e.LinkRef = defined[strings.ToLower(label)]
+		}
 		out.Entries = append(out.Entries, e)
 	}
 	return &out
+}
+
+// linkRefs returns the labels the document defines a link reference for, folded
+// to lower case because a Markdown reference label matches case-insensitively.
+func linkRefs(root ast.Node) map[string]bool {
+	out := map[string]bool{}
+	_ = ast.Walk(root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		if d, ok := n.(*ast.LinkReferenceDefinition); ok {
+			out[strings.ToLower(string(d.Label))] = true
+		}
+		return ast.WalkContinue, nil
+	})
+	return out
+}
+
+// headingLabel returns the text between the brackets of an entry heading, and
+// whether the heading was bracketed at all. An unbracketed heading names no
+// reference label, so nothing can define one for it.
+func headingLabel(raw string) (label string, bracketed bool) {
+	raw = strings.TrimSpace(raw)
+	if !strings.HasPrefix(raw, "[") {
+		return "", false
+	}
+	i := strings.IndexByte(raw, ']')
+	if i < 0 {
+		return "", false
+	}
+	return raw[1:i], true
 }
 
 // collect walks the nodes between an entry's heading and the next one,

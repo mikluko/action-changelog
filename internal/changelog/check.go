@@ -45,11 +45,15 @@ func ParseSeverity(s string) (Severity, error) {
 // The name of each check, as it is written in the register, in a finding, in
 // the GitHub Actions annotation, and in the flags that reconfigure it.
 const (
-	CheckHeadingForm    = "heading-form"
-	CheckDateFormat     = "date-format"
-	CheckVersionOrder   = "version-order"
-	CheckEmptyEntry     = "empty-entry"
-	CheckUnknownSection = "unknown-section"
+	CheckHeadingForm     = "heading-form"
+	CheckDateFormat      = "date-format"
+	CheckVersionOrder    = "version-order"
+	CheckEmptyEntry      = "empty-entry"
+	CheckUnknownSection  = "unknown-section"
+	CheckDateOrder       = "date-order"
+	CheckDateFuture      = "date-future"
+	CheckPartialLinkRef  = "partial-link-refs"
+	CheckPrereleaseEntry = "prerelease-entry"
 )
 
 // Check is one thing the linter looks for.
@@ -66,6 +70,10 @@ type Check struct {
 // It is the single source. The command's --list-checks prints it, the README
 // table is generated from it, and a finding names a row of it, so a check added
 // here needs no second declaration anywhere.
+//
+// A check that catches a defect defaults to Error; a check that encodes a
+// policy defaults to Off, because a policy check's absence is the majority case
+// being correct.
 var Checks = []Check{
 	{
 		Name:        CheckHeadingForm,
@@ -91,6 +99,26 @@ var Checks = []Check{
 		Name:        CheckUnknownSection,
 		Description: "A level-3 heading is one of the accepted section vocabulary.",
 		Default:     Error,
+	},
+	{
+		Name:        CheckDateOrder,
+		Description: "Entry dates run newest first, matching the version order above them.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckDateFuture,
+		Description: "No entry is dated later than today.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckPartialLinkRef,
+		Description: "Every versioned entry has a link reference definition, once any entry does.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckPrereleaseEntry,
+		Description: "Policy: no entry names a pre-release version. Off by default; pre-release headings are legal.",
+		Default:     Off,
 	},
 }
 

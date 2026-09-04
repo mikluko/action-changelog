@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `-fail-on error|warning|never` decides what turns the step red.
 - `-list-checks` prints the register of checks, and the README's table is
   generated from that same register.
+- `date-order` reports an entry dated later than the one above it, and
+  `date-future` one dated later than today, both errors by default.
+- `partial-link-refs` requires a link reference definition on every versioned
+  entry once any entry carries one, and says nothing about a document carrying
+  none.
+- `prerelease-entry` reports a pre-release version heading. It encodes a policy
+  rather than catching a defect, so it is the one check that is off by default.
 
 ## [0.1.0] - 2026-09-04
 
