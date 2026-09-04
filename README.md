@@ -13,6 +13,22 @@ annotation, so a failing check lands on the offending line of the diff.
 A Docker container action, so it runs on Linux runners. It reaches the network
 only to pull its own image.
 
+## Why
+
+Changelog tooling writes the file and re-parses none. The version comes from
+commit messages, from fragment files, or from a tag somebody already cut, and the
+changelog is the record written afterwards. Of 29 widely used projects surveyed,
+exactly one inverts that, and it does so by hand.
+
+This takes the other direction. The author writes `## [1.2.3] - 2026-09-04` and
+everything downstream follows from the file — the version, the notes, whether it
+is already tagged. A changelog that falls behind its tags then blocks the
+pipeline rather than drifting quietly, which is the failure this exists to make
+impossible.
+
+It performs no release itself. It validates and reports; tagging and publishing
+belong to the workflow.
+
 ## Inputs
 
 | Input | Default | Description |
@@ -80,3 +96,17 @@ that commit once the image exists.
 
 This works because the changelog names the version before the tag does, which is
 the same inversion the tool exists to support.
+
+## Contributing
+
+Contributions are welcome. This is maintained in spare time and there is no
+commitment to review a pull request promptly, so an issue first is usually the
+cheaper way to find out whether a change is wanted.
+
+AI-assisted contributions are welcome too, and are asked to be attributed: name
+the tool in the pull request, or leave a `Co-authored-by:` trailer on the
+commits. What matters is that a reviewer knows what they are reading.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
