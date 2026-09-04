@@ -33,11 +33,11 @@ func TestOffOnAFiringCheckExitsZero(t *testing.T) {
 		t.Fatal(err)
 	}
 	var log bytes.Buffer
-	red, err := run(path, changelog.Options{Severities: sev}, changelog.Error, &log, &log)
+	_, findings, err := run(path, changelog.Options{Severities: sev}, &log, &log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !red {
+	if !red(findings, changelog.Error) {
 		t.Fatalf("date-format did not turn the build red; log: %s", log.String())
 	}
 
@@ -46,11 +46,11 @@ func TestOffOnAFiringCheckExitsZero(t *testing.T) {
 		t.Fatal(err)
 	}
 	log.Reset()
-	red, err = run(path, changelog.Options{Severities: sev}, changelog.Error, &log, &log)
+	_, findings, err = run(path, changelog.Options{Severities: sev}, &log, &log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if red {
+	if red(findings, changelog.Error) {
 		t.Errorf("date-format still turned the build red with -off; log: %s", log.String())
 	}
 	if log.Len() != 0 {
@@ -68,12 +68,15 @@ func TestFailOnNeverExitsZero(t *testing.T) {
 		t.Fatal(err)
 	}
 	var log bytes.Buffer
-	red, err := run(path, changelog.Options{}, th, &log, &log)
+	_, findings, err := run(path, changelog.Options{}, &log, &log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if red {
+	if red(findings, th) {
 		t.Error("-fail-on never turned the build red")
+	}
+	if valid(findings) {
+		t.Error("-fail-on never made an invalid document valid")
 	}
 	if !strings.Contains(log.String(), changelog.CheckDateFormat) {
 		t.Errorf("-fail-on never suppressed the report: %q", log.String())
@@ -102,12 +105,12 @@ func TestFailOnRanksWarningsAgainstTheThreshold(t *testing.T) {
 				t.Fatal(err)
 			}
 			var log bytes.Buffer
-			red, err := run(path, changelog.Options{Severities: sev}, th, &log, &log)
+			_, findings, err := run(path, changelog.Options{Severities: sev}, &log, &log)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if red != tc.red {
-				t.Errorf("red is %v, want %v; log: %s", red, tc.red, log.String())
+			if got := red(findings, th); got != tc.red {
+				t.Errorf("red is %v, want %v; log: %s", got, tc.red, log.String())
 			}
 		})
 	}
@@ -139,11 +142,11 @@ func TestRewritingAReleasedEntryTurnsTheBuildRed(t *testing.T) {
 	gitcmd(t, dir, "tag", "-a", "v1.0.0", "-m", "v1.0.0")
 
 	var log bytes.Buffer
-	red, err := run(path, changelog.Options{Git: state(path)}, changelog.Error, &log, &log)
+	_, findings, err := run(path, changelog.Options{Git: state(path).Check}, &log, &log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if red {
+	if red(findings, changelog.Error) {
 		t.Fatalf("a changelog level with its tag turned the build red; log: %s", log.String())
 	}
 
@@ -152,11 +155,11 @@ func TestRewritingAReleasedEntryTurnsTheBuildRed(t *testing.T) {
 		t.Fatal(err)
 	}
 	log.Reset()
-	red, err = run(path, changelog.Options{Git: state(path)}, changelog.Error, &log, &log)
+	_, findings, err = run(path, changelog.Options{Git: state(path).Check}, &log, &log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !red {
+	if !red(findings, changelog.Error) {
 		t.Errorf("rewriting a released entry did not turn the build red; log: %s", log.String())
 	}
 	if !strings.Contains(log.String(), changelog.CheckReleaseEntryModified) {

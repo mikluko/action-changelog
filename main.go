@@ -13,11 +13,15 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
+	"golang.org/x/mod/semver"
+
 	"github.com/mikluko/action-changelog/internal/changelog"
 	"github.com/mikluko/action-changelog/internal/git"
+	"github.com/mikluko/action-changelog/internal/output"
 )
 
 func main() {
@@ -52,16 +56,20 @@ func main() {
 		fail(err)
 	}
 
+	repo := state(*path)
 	opts := changelog.Options{
 		Sections:   split(*sections),
 		Severities: severities,
-		Git:        state(*path),
+		Git:        repo.Check,
 	}
-	red, err := run(*path, opts, threshold, os.Stderr, os.Stdout)
+	doc, findings, err := run(*path, opts, os.Stderr, os.Stdout)
 	if err != nil {
 		fail(err)
 	}
-	if red {
+	if err := emit(outputs(doc, repo.Tags, findings), os.Stdout); err != nil {
+		fail(err)
+	}
+	if red(findings, threshold) {
 		os.Exit(1)
 	}
 }
@@ -71,29 +79,65 @@ func fail(err error) {
 	os.Exit(1)
 }
 
-// run validates the document and reports whether anything it found is bad
-// enough to turn the build red.
+// run validates the document, reporting every finding to log and, under GitHub
+// Actions, repeating each on annotations as a workflow command carrying the
+// check's name as its title.
 //
-// Findings go to log, and under GitHub Actions each is repeated on annotations
-// as a workflow command carrying the check's name as its title.
-func run(path string, opts changelog.Options, threshold changelog.Severity, log, annotations io.Writer) (bool, error) {
+// It returns the parsed document beside the findings because the outputs are
+// read off both.
+func run(path string, opts changelog.Options, log, annotations io.Writer) (*changelog.Changelog, []changelog.Finding, error) {
 	src, err := os.ReadFile(path)
 	if err != nil {
-		return false, err
+		return nil, nil, err
 	}
-	annotate := os.Getenv("GITHUB_ACTIONS") == "true"
+	doc := changelog.Parse(src)
+	findings := doc.Lint(opts)
 
-	var red bool
-	for _, f := range changelog.Parse(src).Lint(opts) {
+	annotate := os.Getenv("GITHUB_ACTIONS") == "true"
+	for _, f := range findings {
 		fmt.Fprintf(log, "%s:%d: %s: %s (%s)\n", path, f.Line, f.Severity, f.Msg, f.Check)
 		if annotate {
 			fmt.Fprintf(annotations, "::%s file=%s,line=%d,title=%s::%s\n", f.Severity, path, f.Line, f.Check, f.Msg)
 		}
-		if threshold != changelog.Off && f.Severity >= threshold {
-			red = true
+	}
+	return doc, findings, nil
+}
+
+// red reports whether anything found is bad enough to turn the build red.
+//
+// A threshold of Off is -fail-on never: no finding is at or above it.
+func red(findings []changelog.Finding, threshold changelog.Severity) bool {
+	if threshold == changelog.Off {
+		return false
+	}
+	for _, f := range findings {
+		if f.Severity >= threshold {
+			return true
 		}
 	}
-	return red, nil
+	return false
+}
+
+// valid reports whether the document conforms, which is a finding at Error and
+// nothing weaker.
+//
+// It is deliberately independent of -fail-on: a workflow passes never precisely
+// so it can read this verdict and branch on it, and a verdict derived from the
+// threshold would answer true every time it did.
+func valid(findings []changelog.Finding) bool {
+	for _, f := range findings {
+		if f.Severity >= changelog.Error {
+			return false
+		}
+	}
+	return true
+}
+
+// repoState is what one run reads from the repository: the state the
+// tag-dependent checks compare against, and the tags the outputs report.
+type repoState struct {
+	Check *changelog.Git
+	Tags  []git.Tag
 }
 
 // state reads what the tag-dependent checks compare against: the newest version
@@ -103,14 +147,14 @@ func run(path string, opts changelog.Options, threshold changelog.Severity, log,
 // Every way that reading can fail is a populated Err rather than a returned
 // error, because failing to read the history is itself one of the checks and is
 // reported by name at the severity the caller configured.
-func state(path string) *changelog.Git {
+func state(path string) repoState {
 	repo, err := git.Open(filepath.Dir(path))
 	if err != nil {
-		return &changelog.Git{Err: err}
+		return repoState{Check: &changelog.Git{Err: err}}
 	}
 	tags, err := repo.Tags()
 	if err != nil {
-		return &changelog.Git{Err: err}
+		return repoState{Check: &changelog.Git{Err: err}}
 	}
 	newest, ok := git.Newest(tags)
 	if !ok {
@@ -120,15 +164,15 @@ func state(path string) *changelog.Git {
 		// is a repository before its first release, which is not a defect.
 		shallow, err := repo.Shallow()
 		if err != nil {
-			return &changelog.Git{Err: err}
+			return repoState{Check: &changelog.Git{Err: err}}
 		}
 		if shallow {
-			return &changelog.Git{Err: errors.New("the checkout is shallow and carries no tags")}
+			return repoState{Check: &changelog.Git{Err: errors.New("the checkout is shallow and carries no tags")}}
 		}
-		return &changelog.Git{}
+		return repoState{Check: &changelog.Git{}, Tags: tags}
 	}
 
-	out := &changelog.Git{NewestTag: newest.Name}
+	out := repoState{Check: &changelog.Git{NewestTag: newest.Name}, Tags: tags}
 	rel, err := repoRelative(repo.Root(), path)
 	if err != nil {
 		return out
@@ -136,9 +180,78 @@ func state(path string) *changelog.Git {
 	// A tag cut before the file existed, or before it moved here, carries no
 	// such blob. There is nothing to compare and nothing to report.
 	if src, err := repo.FileAt(newest.Name, rel); err == nil {
-		out.TaggedChangelog = src
+		out.Check.TaggedChangelog = src
 	}
 	return out
+}
+
+// outputs is what a consuming workflow reads: the verdict, the version the
+// changelog names in both spellings, the version below it as the repository's
+// tags have it, the entry body, and whether the tag is already cut.
+//
+// A document naming no version answers with the four that describe one empty,
+// which is what keeps the verdict independent of whether anything is
+// releasable.
+func outputs(doc *changelog.Changelog, tags []git.Tag, findings []changelog.Finding) []output.Output {
+	var version, tag, notes string
+	if latest, ok := doc.Latest(); ok {
+		version, tag, notes = strings.TrimPrefix(latest.Version, "v"), latest.Version, latest.Body
+	}
+	prev, tagged := previous(tags, tag)
+
+	return []output.Output{
+		{Name: "valid", Value: strconv.FormatBool(valid(findings))},
+		{Name: "version", Value: version},
+		{Name: "tag", Value: tag},
+		{Name: "previous", Value: strings.TrimPrefix(prev.Version(), "v")},
+		{Name: "previous-tag", Value: prev.Name},
+		{Name: "notes", Value: notes},
+		{Name: "already-tagged", Value: strconv.FormatBool(tagged)},
+	}
+}
+
+// previous returns the newest version tag that does not name tag's version, and
+// reports whether one naming it exists.
+//
+// The version below the newest comes from the repository rather than from the
+// entry below the newest, because a changelog whose history begins partway
+// through has no second entry to offer. Tags are compared by the version they
+// name, so a repository tagging 1.2.3 answers already-tagged for a heading
+// reading 1.2.3 as one tagging v1.2.3 would.
+func previous(tags []git.Tag, tag string) (prev git.Tag, tagged bool) {
+	want := semver.Canonical(tag)
+	var found bool
+	for _, t := range git.Versions(tags) {
+		if want != "" && t.Version() == want {
+			tagged = true
+			continue
+		}
+		if !found {
+			prev, found = t, true
+		}
+	}
+	return prev, tagged
+}
+
+// emit prints the outputs and, where the runner named a file to collect them,
+// appends them to it as well.
+func emit(outs []output.Output, stdout io.Writer) error {
+	if err := output.Write(stdout, outs); err != nil {
+		return err
+	}
+	path := os.Getenv("GITHUB_OUTPUT")
+	if path == "" {
+		return nil
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if err := output.Write(f, outs); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // repoRelative rewrites a path on this machine as the slash-separated path a
