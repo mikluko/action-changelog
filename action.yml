@@ -47,18 +47,16 @@ outputs:
       severity. Reported whatever fail-on is set to.
   version:
     description: The version the newest versioned entry names, as in 1.2.3. Empty when the document names none.
-  tag:
-    description: The same version tag-shaped, as in v1.2.3. Empty when the document names no version.
-  previous:
-    description: >-
-      The version below it, as in 1.2.3: the newest version tag the repository
-      carries that is not `tag`. Empty when it carries no other.
-  previous-tag:
-    description: That tag as the repository spells it, which is the ref a workflow can check out.
   notes:
     description: The body of the newest versioned entry, verbatim. Empty when the document names no version.
   already-tagged:
     description: Whether a tag naming `version` already exists in the repository.
+  latest-tag:
+    description: >-
+      The repository's newest version tag, as the repository spells it, which is
+      the ref a workflow can check out. The previous release while
+      `already-tagged` is false, and the release just cut once it is true. Empty
+      when the repository carries no version tag.
 
 runs:
   using: docker

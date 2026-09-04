@@ -23,10 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   none.
 - `prerelease-entry` reports a pre-release version heading. It encodes a policy
   rather than catching a defect, so it is the one check that is off by default.
-- Seven outputs (`valid`, `version`, `tag`, `previous`, `previous-tag`, `notes`
-  and `already-tagged`), written to `$GITHUB_OUTPUT` and printed on stdout for a
-  local run. `notes` is the entry body verbatim, under a delimiter drawn at
-  random per value so a changelog cannot declare outputs of its own.
+- Five outputs (`valid`, `version`, `notes`, `already-tagged` and `latest-tag`),
+  written to `$GITHUB_OUTPUT` and printed on stdout for a local run. Every one
+  is something the action read: `latest-tag` is the repository's newest version
+  tag as the repository spells it, and nothing proposes a tag for `version`.
+  `notes` is the entry body verbatim, under a delimiter drawn at random per
+  value so a changelog cannot declare outputs of its own.
 - Four checks that read the repository's tags: `no-git-tags` reports a checkout
   carrying none, `version-behind-tag` reports a newest entry behind the newest
   tag, and `release-entry-modified` and `prerelease-entry-modified` report a

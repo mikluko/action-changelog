@@ -186,51 +186,47 @@ func state(path string) repoState {
 }
 
 // outputs is what a consuming workflow reads: the verdict, the version the
-// changelog names in both spellings, the version below it as the repository's
-// tags have it, the entry body, and whether the tag is already cut.
+// newest entry names, that entry's body, whether a tag naming the version
+// exists, and the repository's newest version tag as the repository spells it.
 //
-// A document naming no version answers with the four that describe one empty,
+// Every value is something the run read. None is a spelling this command chose:
+// how a repository writes its tags belongs to whatever cuts them, so a consumer
+// wanting a ref uses latest-tag and a consumer wanting a version uses version.
+//
+// A document naming no version still answers, with version and notes empty,
 // which is what keeps the verdict independent of whether anything is
 // releasable.
 func outputs(doc *changelog.Changelog, tags []git.Tag, findings []changelog.Finding) []output.Output {
-	var version, tag, notes string
+	var version, notes, want string
 	if latest, ok := doc.Latest(); ok {
-		version, tag, notes = strings.TrimPrefix(latest.Version, "v"), latest.Version, latest.Body
+		version, notes, want = strings.TrimPrefix(latest.Version, "v"), latest.Body, semver.Canonical(latest.Version)
 	}
-	prev, tagged := previous(tags, tag)
+	newest, _ := git.Newest(tags)
 
 	return []output.Output{
 		{Name: "valid", Value: strconv.FormatBool(valid(findings))},
 		{Name: "version", Value: version},
-		{Name: "tag", Value: tag},
-		{Name: "previous", Value: strings.TrimPrefix(prev.Version(), "v")},
-		{Name: "previous-tag", Value: prev.Name},
 		{Name: "notes", Value: notes},
-		{Name: "already-tagged", Value: strconv.FormatBool(tagged)},
+		{Name: "already-tagged", Value: strconv.FormatBool(tagged(tags, want))},
+		{Name: "latest-tag", Value: newest.Name},
 	}
 }
 
-// previous returns the newest version tag that does not name tag's version, and
-// reports whether one naming it exists.
+// tagged reports whether the repository carries a tag naming version, which is
+// a canonical semver string, or empty for a document naming no version.
 //
-// The version below the newest comes from the repository rather than from the
-// entry below the newest, because a changelog whose history begins partway
-// through has no second entry to offer. Tags are compared by the version they
-// name, so a repository tagging 1.2.3 answers already-tagged for a heading
-// reading 1.2.3 as one tagging v1.2.3 would.
-func previous(tags []git.Tag, tag string) (prev git.Tag, tagged bool) {
-	want := semver.Canonical(tag)
-	var found bool
+// Tags are compared by the version they name, so a repository tagging 1.2.3
+// answers for a heading reading 1.2.3 as one tagging v1.2.3 would.
+func tagged(tags []git.Tag, version string) bool {
+	if version == "" {
+		return false
+	}
 	for _, t := range git.Versions(tags) {
-		if want != "" && t.Version() == want {
-			tagged = true
-			continue
-		}
-		if !found {
-			prev, found = t, true
+		if t.Version() == version {
+			return true
 		}
 	}
-	return prev, tagged
+	return false
 }
 
 // emit prints the outputs and, where the runner named a file to collect them,
