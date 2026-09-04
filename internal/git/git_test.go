@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mikluko/action-changelog/internal/git"
@@ -126,6 +127,32 @@ func TestReferenceSkipsPrereleasesUnlessAsked(t *testing.T) {
 		t.Run(tc.admit.String(), func(t *testing.T) {
 			if got := reference(t, dir, tc.admit); got != tc.want {
 				t.Errorf("the reference is %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// A repository following the GitHub Actions convention carries a moving major
+// tag beside the release it names, and both read as the same version. The
+// reference has to be the one that will still name this commit tomorrow.
+func TestReferencePrefersTheTagThatSpellsTheVersionMostFully(t *testing.T) {
+	for _, order := range [][]string{
+		{"v1.0.0", "v1.0", "v1"},
+		{"v1", "v1.0", "v1.0.0"},
+	} {
+		t.Run(strings.Join(order, ","), func(t *testing.T) {
+			dir := repo(t)
+			write(t, dir, "CHANGELOG.md", oldChangelog)
+			run(t, dir, "add", "CHANGELOG.md")
+			run(t, dir, "commit", "-m", "1.0.0")
+			// Written in both orders, because the tags name one commit and
+			// nothing but this rule decides between them.
+			for _, tag := range order {
+				run(t, dir, "tag", tag)
+			}
+
+			if got := reference(t, dir, git.Final); got != "v1.0.0" {
+				t.Errorf("the reference is %q, want %q", got, "v1.0.0")
 			}
 		})
 	}

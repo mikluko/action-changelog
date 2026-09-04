@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-09-04
+
+### Fixed
+
+- Where two tags name one version, the reference tag is the one that spells it
+  most fully. A repository following the GitHub Actions convention carries `v1`
+  beside `v1.0.0`, both read as `v1.0.0`, and which of them won was whatever
+  order the refs happened to arrive in. `latest-tag` could therefore report the
+  moving major tag, which is documented as the ref a workflow can check out and
+  is the one that moves to the next release under whoever checked it out.
+
 ## [1.0.1] - 2026-09-04
 
 ### Fixed
@@ -75,6 +86,7 @@ recorded separately: nothing consumed them but this repository.
   candidate can be pulled and tested before it merges, and one reaching `main`
   is refused rather than published.
 
-[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/mikluko/action-changelog/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/mikluko/action-changelog/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/mikluko/action-changelog/releases/tag/v1.0.0
