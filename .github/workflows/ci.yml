@@ -10,8 +10,8 @@ permissions:
 
 jobs:
   test:
-    # The action is a composite running a native binary, so the platforms it
-    # claims to support are the platforms it is tested on.
+    # The action runs on Linux only, but the validator is also run directly with
+    # `go run`, so the code is held to every platform it claims to compile on.
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -24,29 +24,18 @@ jobs:
       - run: go build ./...
       - run: go vet ./...
       - run: go test ./...
+      # This repository's changelog is the nearest real document to run against,
+      # and a validator that cannot pass its own file has nothing to say.
       - name: Validate this repository's own changelog
         run: go run . -validate -changelog CHANGELOG.md
 
-  release-config:
+  image:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # The release workflow pushes this image. A build that breaks only there
+      # breaks at the moment a tag is cut, when the tag already exists.
+      - uses: docker/build-push-action@v6
         with:
-          fetch-depth: 0
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-      - uses: goreleaser/goreleaser-action@v6
-        with:
-          args: release --snapshot --clean
-      - name: The archives are named as script/install.sh asks for them
-        run: |
-          test -f dist/action-changelog_linux_amd64.tar.gz
-          test -f dist/action-changelog_darwin_arm64.tar.gz
-          test -f dist/action-changelog_windows_amd64.tar.gz
-
-  script:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - run: shellcheck script/install.sh
+          context: .
+          push: false

@@ -19,35 +19,17 @@ inputs:
       Changelog six: Added, Changed, Deprecated, Removed, Fixed, Security.
     required: false
     default: ""
-  version:
-    description: >-
-      Release of this action to run. Empty resolves the ref the workflow named
-      in `uses:`, falling back to the VERSION file committed beside this file.
-    required: false
-    default: ""
 
 runs:
-  using: composite
-  steps:
-    - name: Install action-changelog
-      shell: bash
-      env:
-        INPUT_VERSION: ${{ inputs.version }}
-        ACTION_PATH: ${{ github.action_path }}
-        ACTION_REF: ${{ github.action_ref }}
-      run: "$ACTION_PATH/script/install.sh"
-
-    - name: Validate the changelog
-      shell: bash
-      # Inputs reach the script through the environment, never through `${{ }}`
-      # expansion: a caller's `changelog` value is interpolated before bash sees
-      # the line, so a quote in it ends the argument and whatever follows runs.
-      env:
-        INPUT_VALIDATE: ${{ inputs.validate }}
-        INPUT_CHANGELOG: ${{ inputs.changelog }}
-        INPUT_SECTIONS: ${{ inputs.sections }}
-      run: |
-        action-changelog \
-          -validate="$INPUT_VALIDATE" \
-          -changelog="$INPUT_CHANGELOG" \
-          -sections="$INPUT_SECTIONS"
+  using: docker
+  # The tag is the release this file was committed in, which is what VERSION
+  # names and what TestVersionMatchesTheChangelog holds to the tag being cut. A
+  # workflow pinning this action by SHA therefore runs the image built for the
+  # release that commit belongs to, with nothing rewritten after the fact.
+  image: docker://ghcr.io/mikluko/action-changelog:v0.1.0
+  # args is argv and never a shell line, so an input carrying a quote is one
+  # argument rather than the end of one.
+  args:
+    - -validate=${{ inputs.validate }}
+    - -changelog=${{ inputs.changelog }}
+    - -sections=${{ inputs.sections }}
