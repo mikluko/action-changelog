@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc1] - 2026-09-04
+
 ### Added
 
 - Every check carries a name (`heading-form`, `date-format`, `version-order`,
@@ -46,6 +48,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   main-branch and pull-request workflow invocations that enforce it, and a
   deliberately broken copy. `go test ./...` validates both documents under the
   inputs those workflows carry.
+- This repository releases itself with its own action. A push to `main` runs the
+  action against this changelog, and where it reports a version no tag carries,
+  publishes the image, cuts the tag, creates the release from `notes` and moves
+  the major tag for a final version. Nothing else cuts a tag here, and a tag
+  pushed by hand is not a path. It is one workflow rather than two because a tag
+  pushed with `GITHUB_TOKEN` triggers no workflow, so a cutting job and a job
+  triggered by its tag would wait on each other forever.
 
 ## [0.1.0] - 2026-09-04
 
@@ -58,5 +67,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A Docker container action packaging the validator, running a prebuilt image
   from `ghcr.io/mikluko/action-changelog` on a `scratch` base.
 
-[Unreleased]: https://github.com/mikluko/action-changelog/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.0.0-rc1...HEAD
+[1.0.0-rc1]: https://github.com/mikluko/action-changelog/compare/v0.1.0...v1.0.0-rc1
 [0.1.0]: https://github.com/mikluko/action-changelog/releases/tag/v0.1.0

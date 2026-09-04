@@ -22,7 +22,7 @@ vocabulary and the link references to the repository.
 
 Two inputs, and the second only on one of the two invocations.
 
-| | [`workflows/main.yml`](workflows/main.yml) | [`workflows/pull-request.yml`](workflows/pull-request.yml) |
+| | [`workflows/main.yaml`](workflows/main.yaml) | [`workflows/pull-request.yaml`](workflows/pull-request.yaml) |
 |---|---|---|
 | `sections` | the six plus `Breaking` | the six plus `Breaking` |
 | `error` | `prerelease-entry` | *(unset)* |
