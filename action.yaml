@@ -58,6 +58,13 @@ outputs:
     description: The body of the newest versioned entry, verbatim. Empty when the document names no version.
   already-tagged:
     description: Whether a tag naming `version` already exists in the repository.
+  prerelease:
+    description: >-
+      Whether the version the newest entry names carries a pre-release part, as
+      in 1.2.3-rc1. A fact about that entry, where the prerelease-entry check is
+      a judgement about the whole document: this says nothing about entries
+      already released, which never stop being pre-releases. False when the
+      document names no version.
   latest-tag:
     description: >-
       The reference tag, as the repository spells it, which is the ref a

@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0-rc2] - 2026-09-04
 
+### Added
+
+- A `prerelease` output: whether the version the newest entry names carries a
+  pre-release part. It is a fact about that entry, where the `prerelease-entry`
+  check is a judgement about the whole document, and the difference is what a
+  workflow gating on the release it is about to cut actually needs. The check
+  fires on entries released long ago, which never stop being pre-releases, so a
+  repository that had ever shipped a candidate would fail it forever.
+
 ### Fixed
 
 - The published image carries `linux/amd64` and `linux/arm64`. v1.0.0-rc1 was
@@ -27,6 +36,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The test job runs on Linux alone. The action is a container action and runs
   nowhere else, so a three-platform matrix was testing a promise the project
   does not make.
+- **Release candidates are cut from the pull request and final versions from
+  `main`.** Every pull request builds and publishes under its commit sha, which
+  is what proves the code and what fills the build cache so the build on `main`
+  is a retag rather than a build. Where the changelog names a candidate, that
+  build gains its version tag too, so the candidate can be pulled and tested
+  while the pull request is open. The changelog appends a tag here; it does not
+  decide whether to build.
+- **A candidate reaching `main` is refused.** The release workflow fails on a
+  newest entry naming a pre-release, so a candidate that was merged rather than
+  promoted stops before anything is published.
+- The build cache is a registry ref rather than the Actions cache, which is
+  branch-scoped and so unreadable from `main` in exactly the direction the reuse
+  has to travel.
 
 ## [1.0.0-rc1] - 2026-09-04
 

@@ -4,6 +4,17 @@ name: Release
 # tag cuts that release, and nothing else does: a tag pushed by hand is not a
 # path here, which is the thesis this action exists to serve.
 #
+# A release candidate is cut from the pull request instead, by the image job in
+# CI, so it can be pulled and tested before merging. One reaching main means a
+# candidate was merged rather than promoted, and this refuses it.
+#
+# The refusal reads the prerelease output rather than raising the
+# prerelease-entry check, and the difference matters. The check fires on every
+# pre-release heading in the document, including entries released months ago,
+# which never stop being pre-releases: using it here would fail main forever
+# after the first candidate shipped. The output is a fact about the entry being
+# released.
+#
 # One workflow rather than two, and that is forced rather than chosen. A tag
 # pushed with GITHUB_TOKEN does not trigger another workflow, so a job that cut
 # the tag and a separate job triggered by that tag would wait on each other
@@ -15,6 +26,10 @@ on:
 permissions:
   contents: write
   packages: write
+
+env:
+  IMAGE: ghcr.io/mikluko/action-changelog
+  CACHE: ghcr.io/mikluko/action-changelog:buildcache
 
 jobs:
   release:
@@ -32,6 +47,7 @@ jobs:
       # This repository consumes its own action, built from source rather than
       # pulled. The image for the release being cut does not exist yet, and a
       # published one would be the previous version reading this commit.
+      #
       - name: Read the changelog
         id: changelog
         run: go run . -validate -changelog CHANGELOG.md
@@ -44,7 +60,14 @@ jobs:
           VALID: ${{ steps.changelog.outputs.valid }}
           VERSION: ${{ steps.changelog.outputs.version }}
           TAGGED: ${{ steps.changelog.outputs.already-tagged }}
+          PRERELEASE: ${{ steps.changelog.outputs.prerelease }}
         run: |
+          # A candidate is cut from its pull request. One here was merged rather
+          # than promoted, so this fails rather than quietly publishing it.
+          if [ "$PRERELEASE" = true ]; then
+            echo "::error::the newest entry names $VERSION, a pre-release. Candidates are cut from the pull request; promote it to a final version before merging."
+            exit 1
+          fi
           if [ "$VALID" != true ] || [ "$TAGGED" != false ] || [ -z "$VERSION" ]; then
             echo "due=false" >>"$GITHUB_OUTPUT"
             echo "nothing to cut: valid=$VALID already-tagged=$TAGGED version=${VERSION:-none}"
@@ -52,12 +75,7 @@ jobs:
           fi
           echo "due=true" >>"$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >>"$GITHUB_OUTPUT"
-          case "$VERSION" in
-            # A moving major tag names the line users follow, so a pre-release
-            # neither moves it nor claims to be the latest release.
-            *-*) echo "major=" >>"$GITHUB_OUTPUT"; echo "prerelease=--prerelease" >>"$GITHUB_OUTPUT" ;;
-            *)   echo "major=v${VERSION%%.*}" >>"$GITHUB_OUTPUT"; echo "prerelease=" >>"$GITHUB_OUTPUT" ;;
-          esac
+          echo "major=v${VERSION%%.*}" >>"$GITHUB_OUTPUT"
 
       # The tag about to be cut and action.yaml's image reference are held to the
       # changelog before anything is published, while backing out is still free.
@@ -67,7 +85,6 @@ jobs:
           GITHUB_REF_NAME: ${{ steps.cut.outputs.tag }}
         run: go test -run TestVersionMatchesTheChangelog .
 
-      # Both the build and the imagetools retag below need buildx present.
       - uses: docker/setup-buildx-action@v3
         if: steps.cut.outputs.due == 'true'
 
@@ -81,16 +98,20 @@ jobs:
       # The image is published before the tag exists. action.yaml at that tag
       # names this image, so a tag pointing at a commit whose image is missing
       # would be a broken action to anyone resolving it in between.
-      # Two platforms because the image is also run by hand. The action itself
-      # only ever runs on a Linux x64 runner, so amd64 alone would satisfy every
-      # workflow and fail every arm64 laptop that pulled it.
+      #
+      # The layers are almost always the pull request's, pushed to the cache ref
+      # by the image job there, so this is a retag far more often than a build.
       - uses: docker/build-push-action@v6
         if: steps.cut.outputs.due == 'true'
         with:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ghcr.io/mikluko/action-changelog:${{ steps.cut.outputs.tag }}
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.cut.outputs.tag }}
+            ${{ env.IMAGE }}:${{ steps.cut.outputs.major }}
+          cache-from: type=registry,ref=${{ env.CACHE }}
+          cache-to: type=registry,ref=${{ env.CACHE }},mode=max
 
       - name: Cut the tag
         if: steps.cut.outputs.due == 'true'
@@ -108,22 +129,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.cut.outputs.tag }}
           NOTES: ${{ steps.changelog.outputs.notes }}
-          PRERELEASE: ${{ steps.cut.outputs.prerelease }}
         run: |
           printf '%s\n' "$NOTES" >"$RUNNER_TEMP/notes.md"
-          gh release create "$TAG" --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" $PRERELEASE
+          gh release create "$TAG" --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
 
-      # Retagged rather than rebuilt, so the major tag names the exact image the
-      # version tag names. Last, because it is the reference consumers follow and
-      # it should move only once everything above it is in place.
+      # Last, because it is the reference consumers follow and it should move
+      # only once everything above it is in place. No pre-release reaches here,
+      # so it always names a final version.
       - name: Move the major tag
-        if: steps.cut.outputs.due == 'true' && steps.cut.outputs.major != ''
+        if: steps.cut.outputs.due == 'true'
         env:
           MAJOR: ${{ steps.cut.outputs.major }}
-          TAG: ${{ steps.cut.outputs.tag }}
         run: |
-          docker buildx imagetools create \
-            --tag "ghcr.io/mikluko/action-changelog:$MAJOR" \
-            "ghcr.io/mikluko/action-changelog:$TAG"
           git tag -f "$MAJOR"
           git push -f origin "refs/tags/$MAJOR"

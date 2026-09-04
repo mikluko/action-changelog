@@ -211,8 +211,10 @@ func state(path string, admit git.Eligible) repoState {
 // releasable.
 func outputs(doc *changelog.Changelog, tags []git.Tag, reference string, findings []changelog.Finding) []output.Output {
 	var version, notes, want string
+	var prerelease bool
 	if latest, ok := doc.Latest(); ok {
 		version, notes, want = strings.TrimPrefix(latest.Version, "v"), latest.Body, semver.Canonical(latest.Version)
+		prerelease = semver.Prerelease(latest.Version) != ""
 	}
 
 	return []output.Output{
@@ -221,6 +223,11 @@ func outputs(doc *changelog.Changelog, tags []git.Tag, reference string, finding
 		{Name: "notes", Value: notes},
 		{Name: "already-tagged", Value: strconv.FormatBool(tagged(tags, want))},
 		{Name: "latest-tag", Value: reference},
+		// A fact about the newest entry, where the prerelease-entry check is a
+		// judgement about the whole document. A workflow gating on what it is
+		// about to release wants the fact: the check also fires on entries long
+		// since released, which never stop being pre-releases.
+		{Name: "prerelease", Value: strconv.FormatBool(prerelease)},
 	}
 }
 
