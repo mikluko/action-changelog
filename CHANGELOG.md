@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Every check carries a name — `heading-form`, `date-format`, `version-order`,
-  `empty-entry`, `unknown-section` — which appears in the finding and as the
+- Every check carries a name (`heading-form`, `date-format`, `version-order`,
+  `empty-entry`, `unknown-section`), which appears in the finding and as the
   title of the workflow annotation.
 - `-error`, `-warn` and `-off` move a named check between severities, and
   `-fail-on error|warning|never` decides what turns the step red.
@@ -23,8 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   none.
 - `prerelease-entry` reports a pre-release version heading. It encodes a policy
   rather than catching a defect, so it is the one check that is off by default.
-- Seven outputs — `valid`, `version`, `tag`, `previous`, `previous-tag`, `notes`
-  and `already-tagged` — written to `$GITHUB_OUTPUT` and printed on stdout for a
+- Seven outputs (`valid`, `version`, `tag`, `previous`, `previous-tag`, `notes`
+  and `already-tagged`), written to `$GITHUB_OUTPUT` and printed on stdout for a
   local run. `notes` is the entry body verbatim, under a delimiter drawn at
   random per value so a changelog cannot declare outputs of its own.
 - Four checks that read the repository's tags: `no-git-tags` reports a checkout

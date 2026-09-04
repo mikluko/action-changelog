@@ -17,7 +17,7 @@ const image = "docker://ghcr.io/mikluko/action-changelog:"
 //
 // The three are written together in the release pull request, before the tag
 // exists, because action.yml has to name an immutable image at the moment it is
-// committed — a workflow pinning this action by SHA reads that file as it stands
+// committed: a workflow pinning this action by SHA reads that file as it stands
 // at that commit, and nothing can be rewritten onto it afterwards. Under the
 // release workflow the tag being cut joins them, which is the last moment a
 // mismatch can be caught for free.

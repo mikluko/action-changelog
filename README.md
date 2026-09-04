@@ -20,15 +20,14 @@ commit messages, from fragment files, or from a tag somebody already cut, and th
 changelog is the record written afterwards. Of 29 widely used projects surveyed,
 exactly one inverts that, and it does so by hand.
 
-This takes the other direction. The author writes `## [1.2.3] - 2026-09-04` and
-everything downstream follows from the file — the version, the notes, whether it
+This takes the other direction. The author writes `## [1.2.3] - 2026-09-04`, and
+everything downstream follows from the file: the version, the notes, whether it
 is already tagged. A changelog that falls behind its tags then blocks the
 pipeline rather than drifting quietly, which is the failure this exists to make
 impossible.
 
-It performs no release itself. It reports what it found — the version, its notes,
-whether that version is already tagged — and the ceremony belongs downstream, to
-whatever automation consumes that metadata.
+It performs no release itself. It reports what it found, and the ceremony
+belongs downstream, to whatever automation consumes that metadata.
 
 ## Inputs
 
