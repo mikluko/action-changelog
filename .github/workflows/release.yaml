@@ -81,11 +81,15 @@ jobs:
       # The image is published before the tag exists. action.yaml at that tag
       # names this image, so a tag pointing at a commit whose image is missing
       # would be a broken action to anyone resolving it in between.
+      # Two platforms because the image is also run by hand. The action itself
+      # only ever runs on a Linux x64 runner, so amd64 alone would satisfy every
+      # workflow and fail every arm64 laptop that pulled it.
       - uses: docker/build-push-action@v6
         if: steps.cut.outputs.due == 'true'
         with:
           context: .
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: ghcr.io/mikluko/action-changelog:${{ steps.cut.outputs.tag }}
 
       - name: Cut the tag

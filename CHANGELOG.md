@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc2] - 2026-09-04
+
+### Fixed
+
+- The published image carries `linux/amd64` and `linux/arm64`. v1.0.0-rc1 was
+  built on an x64 runner and carried that platform alone, so pulling it on an
+  arm64 machine failed. The action itself only ever runs on a Linux x64 runner,
+  which is why the gap went unnoticed until somebody ran the image by hand.
+
+### Changed
+
+- The build stage cross-compiles from the builder's own architecture rather than
+  running under emulation once per platform. A static Go binary cross-compiles
+  for nothing, so QEMU would have bought an identical artefact at several
+  minutes a platform.
+- CI builds both platforms on every pull request, so an architecture that breaks
+  only at release stops breaking at the moment a tag is cut.
+- The test job runs on Linux alone. The action is a container action and runs
+  nowhere else, so a three-platform matrix was testing a promise the project
+  does not make.
+
 ## [1.0.0-rc1] - 2026-09-04
 
 ### Added
@@ -67,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A Docker container action packaging the validator, running a prebuilt image
   from `ghcr.io/mikluko/action-changelog` on a `scratch` base.
 
-[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.0.0-rc1...HEAD
+[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.0.0-rc2...HEAD
+[1.0.0-rc2]: https://github.com/mikluko/action-changelog/compare/v1.0.0-rc1...v1.0.0-rc2
 [1.0.0-rc1]: https://github.com/mikluko/action-changelog/compare/v0.1.0...v1.0.0-rc1
 [0.1.0]: https://github.com/mikluko/action-changelog/releases/tag/v0.1.0

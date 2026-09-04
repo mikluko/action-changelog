@@ -68,11 +68,12 @@ outputs:
 
 runs:
   using: docker
-  # The tag is the release this file was committed in, which is what VERSION
-  # names and what TestVersionMatchesTheChangelog holds to the tag being cut. A
-  # workflow pinning this action by SHA therefore runs the image built for the
-  # release that commit belongs to, with nothing rewritten after the fact.
-  image: docker://ghcr.io/mikluko/action-changelog:v1.0.0-rc1
+  # The tag is the release this file was committed in, which is what
+  # TestVersionMatchesTheChangelog holds to the changelog's newest entry and to
+  # the tag being cut. A workflow pinning this action by SHA therefore runs the
+  # image built for the release that commit belongs to, with nothing rewritten
+  # after the fact.
+  image: docker://ghcr.io/mikluko/action-changelog:v1.0.0-rc2
   # args is argv and never a shell line, so an input carrying a quote is one
   # argument rather than the end of one.
   args:
