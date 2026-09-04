@@ -24,8 +24,8 @@ import (
 const (
 	exampleGood     = "examples/CHANGELOG.md"
 	exampleBroken   = "examples/CHANGELOG.broken.md"
-	workflowMain    = "examples/workflows/main.yml"
-	workflowRequest = "examples/workflows/pull-request.yml"
+	workflowMain    = "examples/workflows/main.yaml"
+	workflowRequest = "examples/workflows/pull-request.yaml"
 )
 
 // The example claims a policy that costs one input on one of the two

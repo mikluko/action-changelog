@@ -72,7 +72,7 @@ runs:
   # names and what TestVersionMatchesTheChangelog holds to the tag being cut. A
   # workflow pinning this action by SHA therefore runs the image built for the
   # release that commit belongs to, with nothing rewritten after the fact.
-  image: docker://ghcr.io/mikluko/action-changelog:v0.1.0
+  image: docker://ghcr.io/mikluko/action-changelog:v1.0.0-rc1
   # args is argv and never a shell line, so an input carrying a quote is one
   # argument rather than the end of one.
   args:

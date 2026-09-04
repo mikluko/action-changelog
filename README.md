@@ -146,23 +146,26 @@ go run github.com/mikluko/action-changelog@latest -list-checks
 
 ## Releasing
 
-`action.yml` names the image it runs, so that reference has to be immutable and
+This repository releases itself with its own action, which is the shortest
+statement of what the action is for.
+
+`action.yaml` names the image it runs, so that reference has to be immutable and
 correct at the moment it is committed: a workflow pinning this action by SHA
 reads the file as it stands at that commit, and nothing is rewritten onto `main`
-afterwards. The version is therefore written in the release pull request, in
-three places a test holds together:
+afterwards. A release is therefore written in the pull request, in two places a
+test holds together:
 
 1. `CHANGELOG.md` gains `## [1.2.3] - YYYY-MM-DD` above the previous entry.
-2. `VERSION` becomes `v1.2.3`.
-3. `action.yml` runs `docker://ghcr.io/mikluko/action-changelog:v1.2.3`.
+2. `action.yaml` runs `docker://ghcr.io/mikluko/action-changelog:v1.2.3`.
 
-`go test ./...` fails while those disagree. Merge the pull request, then push
-the tag `v1.2.3` at the merge commit. The release workflow re-checks all three
-against the tag, builds and pushes the image, and moves the major tag `v1` onto
-that commit once the image exists.
+`go test ./...` fails while those disagree. Merging is the whole of it. The
+release workflow runs the action against this repository's own changelog, and
+where it reports a version no tag carries, publishes the image, cuts the tag,
+creates the release from `notes`, and moves the major tag for a final version.
+Nothing else cuts a tag here, and a tag pushed by hand is not a path.
 
 This works because the changelog names the version before the tag does, which is
-the same inversion the tool exists to support.
+the inversion the tool exists to support.
 
 ## Contributing
 

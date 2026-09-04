@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # The action runs on Linux only, but the validator is also run directly with
+    # `go run`, so the code is held to every platform it claims to compile on.
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
+      # The README's table of checks is generated from the register in code.
+      # Regenerating it here catches a check added without the documentation
+      # following, in the pull request that adds it.
+      - name: The README's table of checks is current
+        if: runner.os == 'Linux'
+        run: |
+          go run ./cmd/gen-readme
+          git diff --exit-code -- README.md
+
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      # The tag-dependent checks and the reference tag both read the history,
+      # and a default checkout is shallow and carries no tags.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      # Built from source, so a pull request is checked by the code it changes
+      # rather than by the last release of that code. Findings land as workflow
+      # annotations on the offending line of the diff.
+      - name: Validate the changelog
+        id: changelog
+        run: go run . -validate -changelog CHANGELOG.md
+
+      # A release pull request should say so in its own checks. The workflow on
+      # main cuts whatever the changelog names, so a reviewer is entitled to know
+      # what merging does before they merge it.
+      #
+      # The values reach the script through the environment and never through
+      # ${{ }} expansion: they come from a file the pull request author wrote.
+      - name: What merging would cut
+        if: always() && steps.changelog.outcome != 'skipped'
+        env:
+          VERSION: ${{ steps.changelog.outputs.version }}
+          TAGGED: ${{ steps.changelog.outputs.already-tagged }}
+          LATEST: ${{ steps.changelog.outputs.latest-tag }}
+        run: |
+          if [ "$TAGGED" = false ] && [ -n "$VERSION" ]; then
+            echo "Merging cuts **v$VERSION**, over ${LATEST:-no previous tag}." >>"$GITHUB_STEP_SUMMARY"
+          else
+            echo "No release: the newest entry is already tagged, or the changelog names none." >>"$GITHUB_STEP_SUMMARY"
+          fi
