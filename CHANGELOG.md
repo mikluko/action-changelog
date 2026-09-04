@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `-fail-on error|warning|never` decides what turns the step red.
 - `-list-checks` prints the register of checks, and the README's table is
   generated from that same register.
+- Four checks that read the repository's tags: `no-git-tags` reports a checkout
+  carrying none, `version-behind-tag` reports a newest entry behind the newest
+  tag, and `release-entry-modified` and `prerelease-entry-modified` report a
+  released entry that has changed or gone since that tag.
 
 ## [0.1.0] - 2026-09-04
 
