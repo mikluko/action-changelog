@@ -1,4 +1,4 @@
-module github.com/mikluko/action-semver
+module github.com/mikluko/action-changelog
 
 go 1.27.0
 
