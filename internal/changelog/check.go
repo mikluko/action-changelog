@@ -133,17 +133,17 @@ var Checks = []Check{
 	},
 	{
 		Name:        CheckVersionBehindTag,
-		Description: "The newest entry is not behind the newest tag.",
+		Description: "The newest entry is not behind the reference tag.",
 		Default:     Error,
 	},
 	{
 		Name:        CheckReleaseEntryModified,
-		Description: "A released entry is unchanged since the newest tag.",
+		Description: "A released entry is unchanged since the reference tag.",
 		Default:     Error,
 	},
 	{
 		Name:        CheckPrereleaseEntryModified,
-		Description: "A released pre-release entry is unchanged since the newest tag.",
+		Description: "A released pre-release entry is unchanged since the reference tag.",
 		Default:     Error,
 	},
 }

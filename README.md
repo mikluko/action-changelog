@@ -40,6 +40,7 @@ belongs downstream, to whatever automation consumes that metadata.
 | `warn` | *(empty)* | Comma-separated checks to raise as warnings. |
 | `off` | *(empty)* | Comma-separated checks to switch off. |
 | `fail-on` | `error` | What turns the step red: `error`, `warning`, or `never`. |
+| `reference-tags` | `final` | Which tags may be the reference tag: `final`, or `all` to admit pre-releases. |
 
 `Breaking` is not in the default vocabulary. Keep a Changelog 2.0.0 marks a
 breaking change inline as `**Breaking:**` inside the section it belongs to;
@@ -49,6 +50,28 @@ repositories that use it as a heading pass it in `sections`.
 them takes the later spelling. A name no check carries is refused rather than
 ignored. `fail-on: never` reports every finding and exits 0.
 
+## The reference tag
+
+Everything that reads the repository reads one tag: the newest version tag
+**reachable from HEAD**, which is what `git describe --tags` names.
+`version-behind-tag` compares against it, `release-entry-modified` and
+`prerelease-entry-modified` take the changelog as it stood there as their
+baseline, and `latest-tag` reports it.
+
+Reachability takes no setting, because a tag on a branch this checkout is not on
+is never the right baseline. It is what makes a maintained support line work: on
+`support/1.x` the reference is that line's own newest release, and the trunk's
+`v2.0.0` is simply unreachable.
+
+`reference-tags` decides only whether a pre-release may serve as one. Under
+`final`, a `v2.2.0-rc.1` staged above the newest entry is not a baseline, so a
+changelog topping out at `2.1.0` is not behind anything; under `all` it is. A
+repository that tags no pre-release reads the same either way.
+
+A shallow checkout is the case this cannot see past: it carries the history it
+was given rather than the one that exists, so a reference it cannot reach fires
+`no-git-tags`, which names `fetch-depth: 0` as the fix.
+
 ## Outputs
 
 | Output | Example | Description |
@@ -57,20 +80,24 @@ ignored. `fail-on: never` reports every finding and exits 0.
 | `version` | `1.2.3` | The version the newest versioned entry names. |
 | `notes` | | The body of the newest versioned entry, verbatim. |
 | `already-tagged` | `false` | Whether a tag naming `version` already exists. |
-| `latest-tag` | `v1.2.2` | The repository's newest version tag, as the repository spells it. |
+| `latest-tag` | `v1.2.2` | The reference tag, as the repository spells it. |
 
 Every output is something the action read. None of them proposes a tag: how a
 repository spells its tags belongs to whatever cuts them, so a workflow wanting
 a ref reads `latest-tag` and a workflow cutting a new one writes the spelling it
 has chosen.
 
-`latest-tag` is the newest version tag, full stop, so `already-tagged` says which
-case a consumer is in: the previous release while it is `false`, and the release
-just cut once it is `true`. Nothing strips the `v`, because the value names a ref
-that has to resolve. It comes from the repository's tags rather than from the
-entry below the newest, because a changelog whose history begins partway through
-has no second entry to offer. Tags are compared by the version they name, so a
-repository tagging `1.2.3` is read the same as one tagging `v1.2.3`.
+`latest-tag` is [the reference tag](#the-reference-tag), so `already-tagged` says
+which case a consumer is in: the previous release while it is `false`, and the
+release just cut once it is `true`. Nothing strips the `v`, because the value
+names a ref that has to resolve. It comes from the repository's tags rather than
+from the entry below the newest, because a changelog whose history begins partway
+through has no second entry to offer. Tags are compared by the version they name,
+so a repository tagging `1.2.3` is read the same as one tagging `v1.2.3`.
+
+`already-tagged` is answered from every tag the checkout carries rather than from
+the reference alone, so a release cut as a pre-release still reports `true` for
+the entry naming it.
 
 A document naming no version is still validated: `valid` and `already-tagged`
 answer, and `version` and `notes` are empty.
@@ -97,9 +124,9 @@ annotation, and which is what `error`, `warn` and `off` take.
 | `partial-link-refs` | `error` | Every versioned entry has a link reference definition, once any entry does. |
 | `prerelease-entry` | `off` | Policy: no entry names a pre-release version. Off by default; pre-release headings are legal. |
 | `no-git-tags` | `error` | The repository's tag history can be read, which every check below needs. |
-| `version-behind-tag` | `error` | The newest entry is not behind the newest tag. |
-| `release-entry-modified` | `error` | A released entry is unchanged since the newest tag. |
-| `prerelease-entry-modified` | `error` | A released pre-release entry is unchanged since the newest tag. |
+| `version-behind-tag` | `error` | The newest entry is not behind the reference tag. |
+| `release-entry-modified` | `error` | A released entry is unchanged since the reference tag. |
+| `prerelease-entry-modified` | `error` | A released pre-release entry is unchanged since the reference tag. |
 
 <!-- checks:end -->
 

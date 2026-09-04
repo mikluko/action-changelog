@@ -53,25 +53,143 @@ func TestTagsCoverAnnotatedAndLightweight(t *testing.T) {
 	}
 }
 
-func TestNewestIgnoresTagsThatNameNoVersion(t *testing.T) {
-	r, err := git.Open(tagged(t))
-	if err != nil {
-		t.Fatal(err)
+// A repository tagging no pre-release reads the same under both settings, which
+// is what makes the default free: nothing is skipped that anybody meant to be
+// the baseline.
+func TestReferenceIgnoresTagsThatNameNoVersion(t *testing.T) {
+	dir := tagged(t)
+	for _, admit := range []git.Eligible{git.Final, git.All} {
+		t.Run(admit.String(), func(t *testing.T) {
+			if got := reference(t, dir, admit); got != "v0.2.0" {
+				t.Errorf("the reference is %q, want v0.2.0", got)
+			}
+		})
 	}
-	tags, err := r.Tags()
-	if err != nil {
-		t.Fatal(err)
-	}
-	newest, ok := git.Newest(tags)
-	if !ok {
-		t.Fatal("no newest tag")
-	}
-	if newest.Name != "v0.2.0" {
-		t.Errorf("newest is %q, want v0.2.0", newest.Name)
-	}
-	if v := git.Versions(tags); len(v) != 2 || v[1].Name != "v0.1.0" {
+
+	_, all := open(t, dir)
+	if v := git.Versions(all); len(v) != 2 || v[1].Name != "v0.1.0" {
 		t.Errorf("versions are %v, want v0.2.0 then v0.1.0", v)
 	}
+}
+
+// The reference is the newest tag this checkout can reach and not the newest
+// the repository holds, which is what lets a maintained support line compare
+// against its own last release while the trunk moves on above it.
+func TestReferenceIsReachableFromHead(t *testing.T) {
+	dir := repo(t)
+	write(t, dir, "CHANGELOG.md", oldChangelog)
+	run(t, dir, "add", "CHANGELOG.md")
+	run(t, dir, "commit", "-m", "the first release")
+	run(t, dir, "tag", "v1.0.0")
+
+	// A support line branching off the first release, and a trunk that carries
+	// on past it. Neither reaches the other's later commits.
+	run(t, dir, "checkout", "-b", "support/1.x")
+	write(t, dir, "CHANGELOG.md", oldChangelog+"\n### Fixed\n\n- A thing on the support line.\n")
+	run(t, dir, "commit", "-am", "a fix on the support line")
+
+	run(t, dir, "checkout", "main")
+	write(t, dir, "CHANGELOG.md", newChangelog)
+	run(t, dir, "commit", "-am", "the second release")
+	run(t, dir, "tag", "v2.0.0")
+
+	if got := reference(t, dir, git.Final); got != "v2.0.0" {
+		t.Errorf("the trunk's reference is %q, want v2.0.0", got)
+	}
+
+	run(t, dir, "checkout", "support/1.x")
+	if got := reference(t, dir, git.Final); got != "v1.0.0" {
+		t.Errorf("the support line's reference is %q, want v1.0.0; v2.0.0 is not reachable from it", got)
+	}
+}
+
+// A release candidate above the newest final is the case the default exists
+// for: the candidate is a tag nobody wants as a baseline, and a repository that
+// does want it says so.
+func TestReferenceSkipsPrereleasesUnlessAsked(t *testing.T) {
+	dir := repo(t)
+	write(t, dir, "CHANGELOG.md", oldChangelog)
+	run(t, dir, "add", "CHANGELOG.md")
+	run(t, dir, "commit", "-m", "2.1.0")
+	run(t, dir, "tag", "v2.1.0")
+	write(t, dir, "CHANGELOG.md", newChangelog)
+	run(t, dir, "commit", "-am", "2.2.0-rc.1")
+	run(t, dir, "tag", "-a", "v2.2.0-rc.1", "-m", "v2.2.0-rc.1")
+
+	for _, tc := range []struct {
+		admit git.Eligible
+		want  string
+	}{
+		{git.Final, "v2.1.0"},
+		{git.All, "v2.2.0-rc.1"},
+	} {
+		t.Run(tc.admit.String(), func(t *testing.T) {
+			if got := reference(t, dir, tc.admit); got != tc.want {
+				t.Errorf("the reference is %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestReferenceIsAbsentWhereNothingReachableIsTagged(t *testing.T) {
+	dir := repo(t)
+	write(t, dir, "CHANGELOG.md", oldChangelog)
+	run(t, dir, "add", "CHANGELOG.md")
+	run(t, dir, "commit", "-m", "the first commit")
+
+	r, all := open(t, dir)
+	if _, ok, err := r.Reference(all, git.Final); err != nil || ok {
+		t.Errorf("a repository with no tags reports ok=%v, err=%v; want false and no error", ok, err)
+	}
+}
+
+func TestParseEligibleRefusesAnythingElse(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want git.Eligible
+	}{
+		{"final", git.Final},
+		{"all", git.All},
+		{" all ", git.All},
+	} {
+		got, err := git.ParseEligible(tc.in)
+		if err != nil || got != tc.want {
+			t.Errorf("%q parsed to %v, err=%v", tc.in, got, err)
+		}
+	}
+	for _, in := range []string{"", "none", "Final", "release"} {
+		if _, err := git.ParseEligible(in); err == nil {
+			t.Errorf("-reference-tags accepted %q", in)
+		}
+	}
+}
+
+// reference resolves the reference tag of the repository at dir, failing the
+// test where none is found: every caller here has tagged one.
+func reference(t *testing.T, dir string, admit git.Eligible) string {
+	t.Helper()
+	r, all := open(t, dir)
+	ref, ok, err := r.Reference(all, admit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatalf("no reference tag under %s among %v", admit, all)
+	}
+	return ref.Name
+}
+
+func open(t *testing.T, dir string) (*git.Repo, []git.Tag) {
+	t.Helper()
+	r, err := git.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := r.Tags()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r, out
 }
 
 func TestFileAtReadsTheTreeTheTagPointsAt(t *testing.T) {

@@ -39,6 +39,13 @@ inputs:
       either way.
     required: false
     default: error
+  reference-tags:
+    description: >-
+      Which tags may be the reference tag: final, or all to admit pre-releases.
+      The reference is the newest such tag reachable from HEAD, and it is what
+      the tag-dependent checks compare against and what latest-tag reports.
+    required: false
+    default: final
 
 outputs:
   valid:
@@ -53,10 +60,11 @@ outputs:
     description: Whether a tag naming `version` already exists in the repository.
   latest-tag:
     description: >-
-      The repository's newest version tag, as the repository spells it, which is
-      the ref a workflow can check out. The previous release while
-      `already-tagged` is false, and the release just cut once it is true. Empty
-      when the repository carries no version tag.
+      The reference tag, as the repository spells it, which is the ref a
+      workflow can check out: the newest version tag reachable from HEAD that
+      reference-tags admits. The previous release while `already-tagged` is
+      false, and the release just cut once it is true. Empty when the checkout
+      reaches no such tag.
 
 runs:
   using: docker
@@ -77,3 +85,4 @@ runs:
     # off is a property name a dotted path is better off not spelling.
     - -off=${{ inputs['off'] }}
     - -fail-on=${{ inputs['fail-on'] }}
+    - -reference-tags=${{ inputs['reference-tags'] }}

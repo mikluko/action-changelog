@@ -25,14 +25,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than catching a defect, so it is the one check that is off by default.
 - Five outputs (`valid`, `version`, `notes`, `already-tagged` and `latest-tag`),
   written to `$GITHUB_OUTPUT` and printed on stdout for a local run. Every one
-  is something the action read: `latest-tag` is the repository's newest version
-  tag as the repository spells it, and nothing proposes a tag for `version`.
-  `notes` is the entry body verbatim, under a delimiter drawn at random per
-  value so a changelog cannot declare outputs of its own.
+  is something the action read: `latest-tag` is the reference tag as the
+  repository spells it, and nothing proposes a tag for `version`. `notes` is the
+  entry body verbatim, under a delimiter drawn at random per value so a
+  changelog cannot declare outputs of its own.
 - Four checks that read the repository's tags: `no-git-tags` reports a checkout
-  carrying none, `version-behind-tag` reports a newest entry behind the newest
-  tag, and `release-entry-modified` and `prerelease-entry-modified` report a
-  released entry that has changed or gone since that tag.
+  whose tag history cannot be read, `version-behind-tag` reports a newest entry
+  behind the reference tag, and `release-entry-modified` and
+  `prerelease-entry-modified` report a released entry that has changed or gone
+  since that tag.
+- One reference tag behind all four of those and behind `latest-tag`: the newest
+  version tag reachable from HEAD, which is what `git describe --tags` names.
+  Reachability takes no setting, because a tag on a branch the checkout is not on
+  is never the right baseline, and it is what lets a maintained support line
+  compare against its own last release. `reference-tags: final|all` decides
+  whether a pre-release may serve as one, defaulting to `final`, so a release
+  candidate staged above the newest entry stops reporting `version-behind-tag`.
+  A repository that tags no pre-release reads the same under either setting.
 - `examples/` carries one worked policy: a changelog written to it, the
   main-branch and pull-request workflow invocations that enforce it, and a
   deliberately broken copy. `go test ./...` validates both documents under the

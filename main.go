@@ -33,6 +33,7 @@ func main() {
 		asWarning  = flag.String("warn", "", "comma-separated checks to raise as warnings")
 		asOff      = flag.String("off", "", "comma-separated checks to switch off")
 		failOn     = flag.String("fail-on", "error", "exit non-zero on error, warning, or never")
+		refTags    = flag.String("reference-tags", "final", "which tags may be the reference tag: final or all")
 		listChecks = flag.Bool("list-checks", false, "print the checks and their default severities")
 	)
 	flag.Parse()
@@ -55,8 +56,12 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
+	admit, err := git.ParseEligible(*refTags)
+	if err != nil {
+		fail(err)
+	}
 
-	repo := state(*path)
+	repo := state(*path, admit)
 	opts := changelog.Options{
 		Sections:   split(*sections),
 		Severities: severities,
@@ -66,7 +71,7 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	if err := emit(outputs(doc, repo.Tags, findings), os.Stdout); err != nil {
+	if err := emit(outputs(doc, repo.Tags, repo.Reference, findings), os.Stdout); err != nil {
 		fail(err)
 	}
 	if red(findings, threshold) {
@@ -134,20 +139,24 @@ func valid(findings []changelog.Finding) bool {
 }
 
 // repoState is what one run reads from the repository: the state the
-// tag-dependent checks compare against, and the tags the outputs report.
+// tag-dependent checks compare against, the reference tag they and the outputs
+// report, and the tags already-tagged is answered from.
+//
+// The reference is resolved once and carried here because four consumers ask
+// for it and resolving it walks the commit graph.
 type repoState struct {
-	Check *changelog.Git
-	Tags  []git.Tag
+	Check     *changelog.Git
+	Tags      []git.Tag
+	Reference string
 }
 
-// state reads what the tag-dependent checks compare against: the newest version
-// tag of the repository holding the changelog, and the changelog as it stood
-// there.
+// state reads what the tag-dependent checks compare against: the reference tag
+// of the repository holding the changelog, and the changelog as it stood there.
 //
 // Every way that reading can fail is a populated Err rather than a returned
 // error, because failing to read the history is itself one of the checks and is
 // reported by name at the severity the caller configured.
-func state(path string) repoState {
+func state(path string, admit git.Eligible) repoState {
 	repo, err := git.Open(filepath.Dir(path))
 	if err != nil {
 		return repoState{Check: &changelog.Git{Err: err}}
@@ -156,30 +165,34 @@ func state(path string) repoState {
 	if err != nil {
 		return repoState{Check: &changelog.Git{Err: err}}
 	}
-	newest, ok := git.Newest(tags)
+	reference, ok, err := repo.Reference(tags, admit)
+	if err != nil {
+		return repoState{Check: &changelog.Git{Err: err}}
+	}
 	if !ok {
 		// A shallow clone carries the history it was given rather than the one
-		// that exists, so the absence of tags says nothing about the repository
-		// and everything about the checkout. A complete history holding no tag
-		// is a repository before its first release, which is not a defect.
+		// that exists, so a reference the checkout cannot reach says nothing
+		// about the repository and everything about the checkout. A complete
+		// history reaching no tag is a repository before its first release, or
+		// a line that has never been released, and neither is a defect.
 		shallow, err := repo.Shallow()
 		if err != nil {
 			return repoState{Check: &changelog.Git{Err: err}}
 		}
 		if shallow {
-			return repoState{Check: &changelog.Git{Err: errors.New("the checkout is shallow and carries no tags")}}
+			return repoState{Check: &changelog.Git{Err: errors.New("the checkout is shallow and reaches no version tag")}}
 		}
 		return repoState{Check: &changelog.Git{}, Tags: tags}
 	}
 
-	out := repoState{Check: &changelog.Git{NewestTag: newest.Name}, Tags: tags}
+	out := repoState{Check: &changelog.Git{ReferenceTag: reference.Name}, Tags: tags, Reference: reference.Name}
 	rel, err := repoRelative(repo.Root(), path)
 	if err != nil {
 		return out
 	}
 	// A tag cut before the file existed, or before it moved here, carries no
 	// such blob. There is nothing to compare and nothing to report.
-	if src, err := repo.FileAt(newest.Name, rel); err == nil {
+	if src, err := repo.FileAt(reference.Name, rel); err == nil {
 		out.Check.TaggedChangelog = src
 	}
 	return out
@@ -187,7 +200,7 @@ func state(path string) repoState {
 
 // outputs is what a consuming workflow reads: the verdict, the version the
 // newest entry names, that entry's body, whether a tag naming the version
-// exists, and the repository's newest version tag as the repository spells it.
+// exists, and the reference tag as the repository spells it.
 //
 // Every value is something the run read. None is a spelling this command chose:
 // how a repository writes its tags belongs to whatever cuts them, so a consumer
@@ -196,19 +209,18 @@ func state(path string) repoState {
 // A document naming no version still answers, with version and notes empty,
 // which is what keeps the verdict independent of whether anything is
 // releasable.
-func outputs(doc *changelog.Changelog, tags []git.Tag, findings []changelog.Finding) []output.Output {
+func outputs(doc *changelog.Changelog, tags []git.Tag, reference string, findings []changelog.Finding) []output.Output {
 	var version, notes, want string
 	if latest, ok := doc.Latest(); ok {
 		version, notes, want = strings.TrimPrefix(latest.Version, "v"), latest.Body, semver.Canonical(latest.Version)
 	}
-	newest, _ := git.Newest(tags)
 
 	return []output.Output{
 		{Name: "valid", Value: strconv.FormatBool(valid(findings))},
 		{Name: "version", Value: version},
 		{Name: "notes", Value: notes},
 		{Name: "already-tagged", Value: strconv.FormatBool(tagged(tags, want))},
-		{Name: "latest-tag", Value: newest.Name},
+		{Name: "latest-tag", Value: reference},
 	}
 }
 

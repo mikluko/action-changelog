@@ -49,41 +49,41 @@ func TestGitChecks(t *testing.T) {
 		{
 			name: "an entry level with the tag passes",
 			doc:  tagged,
-			git:  &changelog.Git{NewestTag: "v0.2.0", TaggedChangelog: []byte(tagged)},
+			git:  &changelog.Git{ReferenceTag: "v0.2.0", TaggedChangelog: []byte(tagged)},
 		},
 		{
 			name: "an entry ahead of the tag passes",
 			doc:  strings.Replace(tagged, "## [0.2.0]", "## [0.3.0]", 1),
-			git:  &changelog.Git{NewestTag: "v0.2.0"},
+			git:  &changelog.Git{ReferenceTag: "v0.2.0"},
 		},
 		{
 			name: "an entry behind the tag fires",
 			doc:  tagged,
-			git:  &changelog.Git{NewestTag: "v0.9.0"},
+			git:  &changelog.Git{ReferenceTag: "v0.9.0"},
 			want: []string{changelog.CheckVersionBehindTag},
 		},
 		{
 			name: "a tag written without its v is read the same",
 			doc:  tagged,
-			git:  &changelog.Git{NewestTag: "0.9.0"},
+			git:  &changelog.Git{ReferenceTag: "0.9.0"},
 			want: []string{changelog.CheckVersionBehindTag},
 		},
 		{
 			name: "a pre-release entry orders against its release",
 			doc:  strings.Replace(tagged, "## [0.2.0]", "## [0.2.0-rc.1]", 1),
-			git:  &changelog.Git{NewestTag: "v0.2.0"},
+			git:  &changelog.Git{ReferenceTag: "v0.2.0"},
 			want: []string{changelog.CheckVersionBehindTag},
 		},
 		{
 			name: "notes rewritten under a released entry fire",
 			doc:  strings.Replace(tagged, "- The first thing.", "- The first thing, restated.", 1),
-			git:  &changelog.Git{NewestTag: "v0.2.0", TaggedChangelog: []byte(tagged)},
+			git:  &changelog.Git{ReferenceTag: "v0.2.0", TaggedChangelog: []byte(tagged)},
 			want: []string{changelog.CheckReleaseEntryModified},
 		},
 		{
 			name: "a released entry's date changing fires",
 			doc:  strings.Replace(tagged, "0.1.0] - 2026-01-01", "0.1.0] - 2026-01-02", 1),
-			git:  &changelog.Git{NewestTag: "v0.2.0", TaggedChangelog: []byte(tagged)},
+			git:  &changelog.Git{ReferenceTag: "v0.2.0", TaggedChangelog: []byte(tagged)},
 			want: []string{changelog.CheckReleaseEntryModified},
 		},
 		{
@@ -96,7 +96,7 @@ func TestGitChecks(t *testing.T) {
 
 - The second thing.
 `,
-			git:  &changelog.Git{NewestTag: "v0.2.0", TaggedChangelog: []byte(tagged)},
+			git:  &changelog.Git{ReferenceTag: "v0.2.0", TaggedChangelog: []byte(tagged)},
 			want: []string{changelog.CheckReleaseEntryModified},
 		},
 		{
@@ -108,7 +108,7 @@ func TestGitChecks(t *testing.T) {
 
 - The thing nobody wrote down at the time.
 `,
-			git: &changelog.Git{NewestTag: "v0.2.0", TaggedChangelog: []byte(tagged)},
+			git: &changelog.Git{ReferenceTag: "v0.2.0", TaggedChangelog: []byte(tagged)},
 		},
 		{
 			name: "a link-reference block added at the foot does not fire",
@@ -116,24 +116,24 @@ func TestGitChecks(t *testing.T) {
 [0.2.0]: https://example.invalid/compare/v0.1.0...v0.2.0
 [0.1.0]: https://example.invalid/releases/tag/v0.1.0
 `,
-			git: &changelog.Git{NewestTag: "v0.2.0", TaggedChangelog: []byte(tagged)},
+			git: &changelog.Git{ReferenceTag: "v0.2.0", TaggedChangelog: []byte(tagged)},
 		},
 		{
 			name: "a rewritten pre-release entry fires the other check",
 			doc:  strings.Replace(prereleased, "- The candidate.", "- The candidate, folded in.", 1),
-			git:  &changelog.Git{NewestTag: "v0.2.0", TaggedChangelog: []byte(prereleased)},
+			git:  &changelog.Git{ReferenceTag: "v0.2.0", TaggedChangelog: []byte(prereleased)},
 			want: []string{changelog.CheckPrereleaseEntryModified},
 		},
 		{
 			name: "collapsing a pre-release entry fires only the pre-release check",
 			doc:  tagged,
-			git:  &changelog.Git{NewestTag: "v0.2.0", TaggedChangelog: []byte(prereleased)},
+			git:  &changelog.Git{ReferenceTag: "v0.2.0", TaggedChangelog: []byte(prereleased)},
 			want: []string{changelog.CheckPrereleaseEntryModified},
 		},
 		{
 			name: "a tag carrying no changelog compares nothing",
 			doc:  strings.Replace(tagged, "- The first thing.", "- Rewritten freely.", 1),
-			git:  &changelog.Git{NewestTag: "v0.2.0"},
+			git:  &changelog.Git{ReferenceTag: "v0.2.0"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -177,7 +177,7 @@ func TestPrereleaseEntryModifiedIsSeparatelyConfigurable(t *testing.T) {
 	}
 	got := checks(changelog.Parse([]byte(doc)).Lint(changelog.Options{
 		Severities: sev,
-		Git:        &changelog.Git{NewestTag: "v0.2.0", TaggedChangelog: []byte(prereleased)},
+		Git:        &changelog.Git{ReferenceTag: "v0.2.0", TaggedChangelog: []byte(prereleased)},
 	}))
 	if len(got) != 0 {
 		t.Errorf("checks fired %v with the pre-release check off, want none", got)

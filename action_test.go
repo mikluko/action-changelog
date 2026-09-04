@@ -68,7 +68,7 @@ func TestActionDeclaresEveryOutput(t *testing.T) {
 	declared := action.Outputs
 
 	written := map[string]bool{}
-	for _, o := range outputs(changelog.Parse(nil), nil, nil) {
+	for _, o := range outputs(changelog.Parse(nil), nil, "", nil) {
 		written[o.Name] = true
 		if _, ok := declared[o.Name]; !ok {
 			t.Errorf("action.yml declares no output %q", o.Name)
