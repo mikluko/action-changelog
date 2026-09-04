@@ -76,7 +76,7 @@ runs:
   # the tag being cut. A workflow pinning this action by SHA therefore runs the
   # image built for the release that commit belongs to, with nothing rewritten
   # after the fact.
-  image: docker://ghcr.io/mikluko/action-changelog:v1.0.0
+  image: docker://ghcr.io/mikluko/action-changelog:v1.0.1
   # args is argv and never a shell line, so an input carrying a quote is one
   # argument rather than the end of one.
   args:

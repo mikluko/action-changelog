@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-04
+
 ### Fixed
 
 - `no-git-tags` fires where the repository is present and cannot be read. A
@@ -73,5 +75,6 @@ recorded separately: nothing consumed them but this repository.
   candidate can be pulled and tested before it merges, and one reaching `main`
   is refused rather than published.
 
-[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/mikluko/action-changelog/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/mikluko/action-changelog/releases/tag/v1.0.0
