@@ -309,6 +309,37 @@ func TestOpenReportsWhereThereIsNoRepository(t *testing.T) {
 	}
 }
 
+// A linked worktree's .git is a file naming a directory under the parent
+// repository. Where that directory is out of reach, opening the worktree used
+// to succeed and read as a repository holding no tags at all, which is the
+// evidence every tag-dependent check then passed on.
+func TestOpenReportsARepositoryItCannotRead(t *testing.T) {
+	origin := tagged(t)
+	tree := filepath.Join(t.TempDir(), "linked")
+	run(t, origin, "worktree", "add", "--detach", tree)
+
+	if _, err := git.Open(tree); err != nil {
+		t.Fatalf("opening an intact linked worktree failed: %v", err)
+	}
+
+	if err := os.RemoveAll(filepath.Join(origin, ".git", "worktrees")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := git.Open(tree); err == nil {
+		t.Error("opening a worktree whose gitdir does not resolve succeeded")
+	}
+}
+
+// A submodule's .git is the same shape and breaks the same way, so the answer
+// does not turn on the file having been written by git worktree add.
+func TestOpenReportsAGitFileNamingNothing(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, ".git", "gitdir: ./nowhere\n")
+	if _, err := git.Open(dir); err == nil {
+		t.Error("opening a directory whose .git names a missing directory succeeded")
+	}
+}
+
 // repo initialises an empty repository whose commits do not depend on the
 // machine's git configuration.
 func repo(t *testing.T) string {

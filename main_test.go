@@ -222,6 +222,44 @@ func TestAReleaseCandidateIsNoBaselineUnderTheDefault(t *testing.T) {
 	}
 }
 
+// A repository that cannot be read and one that is not there deserve the same
+// answer, and the tag-dependent checks passing quietly on a history nothing
+// read is the failure that runs in the dangerous direction.
+func TestAnUnreadableRepositoryFiresNoGitTags(t *testing.T) {
+	const doc = "# Changelog\n\n## [1.0.0] - 2026-01-01\n\n### Added\n\n- a thing\n"
+
+	origin := fixture(t)
+	if err := os.WriteFile(filepath.Join(origin, "CHANGELOG.md"), []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitcmd(t, origin, "add", "CHANGELOG.md")
+	gitcmd(t, origin, "commit", "-m", "1.0.0")
+	gitcmd(t, origin, "tag", "v1.0.0")
+
+	tree := filepath.Join(t.TempDir(), "linked")
+	gitcmd(t, origin, "worktree", "add", "--detach", tree)
+	path := filepath.Join(tree, "CHANGELOG.md")
+
+	if repo := state(path, git.Final); repo.Check.Err != nil {
+		t.Fatalf("an intact linked worktree reads as unreadable: %v", repo.Check.Err)
+	}
+
+	if err := os.RemoveAll(filepath.Join(origin, ".git", "worktrees")); err != nil {
+		t.Fatal(err)
+	}
+	var log bytes.Buffer
+	_, findings, err := run(path, changelog.Options{Git: state(path, git.Final).Check}, &log, &log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !red(findings, changelog.Error) {
+		t.Fatalf("a repository that cannot be read did not turn the build red; log: %s", log.String())
+	}
+	if !strings.Contains(log.String(), changelog.CheckNoGitTags) {
+		t.Errorf("the finding is not %s: %s", changelog.CheckNoGitTags, log.String())
+	}
+}
+
 // fixture initialises an empty repository whose commits do not depend on the
 // machine's git configuration.
 func fixture(t *testing.T) string {

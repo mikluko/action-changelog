@@ -63,6 +63,11 @@ func (r *Repo) Root() string { return r.root }
 // A .git file is followed to the directory it names, and a linked worktree's
 // commondir is followed from there: tags and objects live in the common
 // directory, and the worktree-local gitdir carries neither.
+//
+// A git directory that cannot be read is an error, and not a repository whose
+// tags happen to be absent. The caller cannot tell those apart afterwards: an
+// unreadable store yields no references, which is exactly what a repository
+// before its first release yields.
 func Open(dir string) (*Repo, error) {
 	root, dot, err := discover(dir)
 	if err != nil {
@@ -325,12 +330,22 @@ func discover(dir string) (root, dot string, err error) {
 		info, err := os.Stat(candidate)
 		if err == nil {
 			if !info.IsDir() {
-				if candidate, err = gitdir(candidate); err != nil {
+				named := candidate
+				if candidate, err = gitdir(named); err != nil {
+					return "", "", err
+				}
+				if err := readable(candidate, named); err != nil {
 					return "", "", err
 				}
 			}
 			dot, err := common(candidate)
-			return abs, dot, err
+			if err != nil {
+				return "", "", err
+			}
+			if err := readable(dot, candidate); err != nil {
+				return "", "", err
+			}
+			return abs, dot, nil
 		}
 		parent := filepath.Dir(abs)
 		if parent == abs {
@@ -338,6 +353,27 @@ func discover(dir string) (root, dot string, err error) {
 		}
 		abs = parent
 	}
+}
+
+// readable reports that dir, which named it, is not a directory this process
+// can read.
+//
+// It is what separates a repository that cannot be read from one that is not
+// there. A .git file names an absolute path, and nothing guarantees that path
+// resolves here: a linked worktree copied away from its parent, a submodule
+// without the superproject, a container mounting the working tree and not the
+// repository. Left unchecked, the storage layer opens on the missing directory
+// and yields an empty reference set, which reads as a repository that has never
+// been tagged.
+func readable(dir, named string) error {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("%s names the git directory %s, which cannot be read: %w", named, dir, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s names the git directory %s, which is not a directory", named, dir)
+	}
+	return nil
 }
 
 // gitdir reads the "gitdir: <path>" a .git file carries in a linked worktree or

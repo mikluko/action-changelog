@@ -184,15 +184,28 @@ func TestPrereleaseEntryModifiedIsSeparatelyConfigurable(t *testing.T) {
 	}
 }
 
+// Two causes fire this check and neither remedy answers the other, so one
+// message carries both and the cause it interpolates says which is this run's.
 func TestNoGitTagsNamesTheFix(t *testing.T) {
-	got := changelog.Parse([]byte(tagged)).Lint(changelog.Options{
-		Git: &changelog.Git{Err: errors.New("the checkout is shallow and carries no tags")},
-	})
-	if len(got) != 1 {
-		t.Fatalf("findings are %v, want one", got)
-	}
-	if !strings.Contains(got[0].Msg, "fetch-depth: 0") {
-		t.Errorf("message %q does not name fetch-depth: 0", got[0].Msg)
+	for _, cause := range []string{
+		"the checkout is shallow and carries no tags",
+		".git names the git directory /elsewhere/.git/worktrees/x, which cannot be read",
+	} {
+		got := changelog.Parse([]byte(tagged)).Lint(changelog.Options{
+			Git: &changelog.Git{Err: errors.New(cause)},
+		})
+		if len(got) != 1 {
+			t.Fatalf("findings are %v, want one", got)
+		}
+		if !strings.Contains(got[0].Msg, cause) {
+			t.Errorf("message %q does not name the cause %q", got[0].Msg, cause)
+		}
+		if !strings.Contains(got[0].Msg, "fetch-depth: 0") {
+			t.Errorf("message %q does not name fetch-depth: 0", got[0].Msg)
+		}
+		if !strings.Contains(got[0].Msg, "cannot see") {
+			t.Errorf("message %q does not name the unreachable git directory", got[0].Msg)
+		}
 	}
 }
 

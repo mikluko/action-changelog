@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `no-git-tags` fires where the repository is present and cannot be read. A
+  `.git` file naming a git directory that does not resolve here (a linked
+  worktree away from its parent, a submodule without the superproject, a
+  container that mounted the working tree and not the repository) read as a
+  repository holding no tags, so every tag-dependent check passed on a history
+  nothing had read. The finding's message now carries the remedy for both
+  causes and names the one this run met.
+
 ## [1.0.0] - 2026-09-04
 
 First release. The candidates that preceded it were staging posts and are not
