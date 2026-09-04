@@ -2,6 +2,7 @@ package changelog
 
 import (
 	"fmt"
+	"time"
 
 	"golang.org/x/mod/semver"
 )
@@ -62,6 +63,9 @@ func (c *Changelog) Lint(opts Options) []Finding {
 	}
 	f := findings{severities: severities}
 
+	linked := anyLinkRef(c.Entries)
+	asOf := today()
+
 	var prev Entry
 	for _, e := range c.Entries {
 		switch {
@@ -81,8 +85,26 @@ func (c *Changelog) Lint(opts Options) []Finding {
 					"version %s does not come before %s, which is above it; entries run newest first",
 					e.Version[1:], prev.Version[1:])
 			}
+			if isDate(e.Date) && isDate(prev.Date) && e.Date > prev.Date {
+				f.add(CheckDateOrder, e.Line,
+					"version %s is dated %s, later than %s above it; entries run newest first",
+					e.Version[1:], e.Date, prev.Date)
+			}
+			if isDate(e.Date) && e.Date > asOf {
+				f.add(CheckDateFuture, e.Line,
+					"version %s is dated %s, later than today, %s", e.Version[1:], e.Date, asOf)
+			}
 			if e.Body == "" {
 				f.add(CheckEmptyEntry, e.Line, "version %s has no entries under it", e.Version[1:])
+			}
+			if linked && !e.LinkRef {
+				f.add(CheckPartialLinkRef, e.Line,
+					"version %s has no link reference definition, while others do; it renders as literal text",
+					e.Version[1:])
+			}
+			if semver.Prerelease(e.Version) != "" {
+				f.add(CheckPrereleaseEntry, e.Line,
+					"version %s is a pre-release", e.Version[1:])
 			}
 			prev = e
 		}
@@ -95,10 +117,33 @@ func (c *Changelog) Lint(opts Options) []Finding {
 	return f.out
 }
 
+// anyLinkRef reports whether any versioned entry carries a link reference
+// definition, which is what turns the partial-link-refs check on: a document
+// carrying none is written without them and is not partly done.
+func anyLinkRef(entries []Entry) bool {
+	for _, e := range entries {
+		if e.Version != "" && e.LinkRef {
+			return true
+		}
+	}
+	return false
+}
+
+// now is the clock today reads. Tests replace it.
+var now = time.Now
+
+// today returns the date the date-future check compares an entry against: the
+// current date in UTC, whatever zone the author or the runner sits in.
+//
+// A heading a day out either side of a local midnight is not what the check is
+// for; a year typed wrong is.
+func today() string { return now().UTC().Format("2006-01-02") }
+
 // isDate reports whether s is a YYYY-MM-DD calendar date.
 //
-// The check is on shape rather than on validity as an instant: a changelog dated
-// in the future is a decision this package does not make.
+// The check is on shape rather than on validity as an instant: whether the date
+// is in the future is date-future's question, and whether it is a real calendar
+// day is nobody's.
 func isDate(s string) bool {
 	if len(s) != 10 || s[4] != '-' || s[7] != '-' {
 		return false

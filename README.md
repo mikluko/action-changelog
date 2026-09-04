@@ -47,6 +47,10 @@ annotation, and which is what `error`, `warn` and `off` take.
 | `version-order` | `error` | Entries run newest first, each version strictly below the one above it. |
 | `empty-entry` | `error` | A released entry carries something under it. |
 | `unknown-section` | `error` | A level-3 heading is one of the accepted section vocabulary. |
+| `date-order` | `error` | Entry dates run newest first, matching the version order above them. |
+| `date-future` | `error` | No entry is dated later than today. |
+| `partial-link-refs` | `error` | Every versioned entry has a link reference definition, once any entry does. |
+| `prerelease-entry` | `off` | Policy: no entry names a pre-release version. Off by default; pre-release headings are legal. |
 
 <!-- checks:end -->
 

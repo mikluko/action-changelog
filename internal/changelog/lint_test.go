@@ -29,6 +29,7 @@ func TestLintAcceptsAWellFormedDocument(t *testing.T) {
 		"- a bug",
 		"",
 		"[1.1.0]: https://example.test/compare/v1.0.0...v1.1.0",
+		"[1.0.0]: https://example.test/releases/tag/v1.0.0",
 	)
 	if len(got) != 0 {
 		t.Fatalf("findings on a well formed document: %v", got)
