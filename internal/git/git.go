@@ -292,6 +292,12 @@ func final(tags []Tag) []Tag {
 }
 
 // Versions returns the tags naming a semver version, highest first.
+//
+// Two tags can name one version: a repository following the GitHub Actions
+// convention carries v1 beside v1.0.0, and both read as v1.0.0. They are ordered
+// by how fully each spells that version, so the reference tag is the immutable
+// v1.0.0 rather than the v1 that moves to the next release under whoever checked
+// it out.
 func Versions(tags []Tag) []Tag {
 	out := make([]Tag, 0, len(tags))
 	for _, t := range tags {
@@ -300,9 +306,26 @@ func Versions(tags []Tag) []Tag {
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
-		return semver.Compare(out[i].Version(), out[j].Version()) > 0
+		if c := semver.Compare(out[i].Version(), out[j].Version()); c != 0 {
+			return c > 0
+		}
+		return components(out[i].Name) > components(out[j].Name)
 	})
 	return out
+}
+
+// components counts the numeric parts a tag's name spells, so v1 answers 1 and
+// v1.0.0 answers 3.
+//
+// It reads the name rather than the version, because Version canonicalises them
+// to the same string, which is exactly what makes the two indistinguishable
+// without this.
+func components(name string) int {
+	v := strings.TrimPrefix(strings.TrimPrefix(name, "v"), "V")
+	if i := strings.IndexAny(v, "-+"); i >= 0 {
+		v = v[:i]
+	}
+	return strings.Count(v, ".") + 1
 }
 
 // canonical adds the "v" that golang.org/x/mod/semver requires, so a repository
