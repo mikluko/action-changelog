@@ -1,0 +1,32 @@
+name: Changelog
+description: Read a Keep a Changelog document and report where it departs from the format.
+branding:
+  icon: check-square
+  color: purple
+
+inputs:
+  changelog:
+    description: Path to the changelog, relative to the workspace.
+    required: false
+    default: CHANGELOG.md
+  validate:
+    description: Report where the changelog departs from the format.
+    required: false
+    default: "true"
+  sections:
+    description: >-
+      Comma-separated level-3 headings to accept. Empty accepts the Keep a
+      Changelog six: Added, Changed, Deprecated, Removed, Fixed, Security.
+    required: false
+    default: ""
+
+runs:
+  using: docker
+  # The tag names the version CHANGELOG.md's newest released entry names, and is
+  # written in the release pull request rather than after the tag exists.
+  # TestActionPinsTheChangelogVersion enforces the pair.
+  image: docker://ghcr.io/mikluko/action-changelog:v0.1.0
+  args:
+    - -validate=${{ inputs.validate }}
+    - -changelog=${{ inputs.changelog }}
+    - -sections=${{ inputs.sections }}
