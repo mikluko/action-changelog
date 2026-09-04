@@ -39,8 +39,15 @@ runs:
 
     - name: Validate the changelog
       shell: bash
+      # Inputs reach the script through the environment, never through `${{ }}`
+      # expansion: a caller's `changelog` value is interpolated before bash sees
+      # the line, so a quote in it ends the argument and whatever follows runs.
+      env:
+        INPUT_VALIDATE: ${{ inputs.validate }}
+        INPUT_CHANGELOG: ${{ inputs.changelog }}
+        INPUT_SECTIONS: ${{ inputs.sections }}
       run: |
         action-changelog \
-          -validate="${{ inputs.validate }}" \
-          -changelog="${{ inputs.changelog }}" \
-          -sections="${{ inputs.sections }}"
+          -validate="$INPUT_VALIDATE" \
+          -changelog="$INPUT_CHANGELOG" \
+          -sections="$INPUT_SECTIONS"
