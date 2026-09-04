@@ -7,13 +7,18 @@ import (
 )
 
 // Finding is one departure from the format, addressed to the line that carries
-// it so a caller can annotate a diff.
+// it so a caller can annotate a diff, and naming the check that raised it so a
+// reader knows which one to reconfigure.
 type Finding struct {
-	Line int
-	Msg  string
+	Check    string
+	Severity Severity
+	Line     int
+	Msg      string
 }
 
-func (f Finding) String() string { return fmt.Sprintf("%d: %s", f.Line, f.Msg) }
+func (f Finding) String() string {
+	return fmt.Sprintf("%d: %s: %s (%s)", f.Line, f.Severity, f.Msg, f.Check)
+}
 
 // DefaultSections is the vocabulary Keep a Changelog mandates, unchanged between
 // 1.1.0 and 2.0.0.
@@ -26,13 +31,23 @@ var DefaultSections = []string{
 	"Added", "Changed", "Deprecated", "Removed", "Fixed", "Security",
 }
 
+// Options configures a lint run.
+type Options struct {
+	// Sections is the accepted set of level-3 headings; DefaultSections is
+	// used when it is empty.
+	Sections []string
+	// Severities is the severity in force per check; DefaultSeverities is
+	// used when it is nil. A check at Off raises nothing.
+	Severities Severities
+}
+
 // Lint reports every way c departs from the format, in document order.
 //
-// sections is the accepted set of level-3 headings; DefaultSections is used when
-// it is empty. An empty result means the document is well formed, not that its
+// An empty result means no check above Off had anything to say, not that the
 // newest entry is releasable: whether that version is a legal step past what is
 // already tagged is a question about the repository, not about the file.
-func (c *Changelog) Lint(sections []string) []Finding {
+func (c *Changelog) Lint(opts Options) []Finding {
+	sections := opts.Sections
 	if len(sections) == 0 {
 		sections = DefaultSections
 	}
@@ -41,44 +56,43 @@ func (c *Changelog) Lint(sections []string) []Finding {
 		allowed[s] = true
 	}
 
-	var (
-		out  []Finding
-		prev Entry
-	)
+	severities := opts.Severities
+	if severities == nil {
+		severities = DefaultSeverities()
+	}
+	f := findings{severities: severities}
+
+	var prev Entry
 	for _, e := range c.Entries {
 		switch {
 		case e.Unreleased:
 		case e.Version == "":
-			out = append(out, Finding{e.Line, fmt.Sprintf(
-				"heading %q is neither [Unreleased] nor a version and date, as in [1.2.3] - 2006-01-02", e.Raw)})
+			f.add(CheckHeadingForm, e.Line,
+				"heading %q is neither [Unreleased] nor a version and date, as in [1.2.3] - 2006-01-02", e.Raw)
 		default:
 			if e.Date == "" {
-				out = append(out, Finding{e.Line, fmt.Sprintf(
-					"version %s carries no date; write it as [%s] - 2006-01-02",
-					e.Version[1:], e.Version[1:])})
+				f.add(CheckHeadingForm, e.Line,
+					"version %s carries no date; write it as [%s] - 2006-01-02", e.Version[1:], e.Version[1:])
 			} else if !isDate(e.Date) {
-				out = append(out, Finding{e.Line, fmt.Sprintf(
-					"date %q is not YYYY-MM-DD", e.Date)})
+				f.add(CheckDateFormat, e.Line, "date %q is not YYYY-MM-DD", e.Date)
 			}
 			if prev.Version != "" && semver.Compare(e.Version, prev.Version) >= 0 {
-				out = append(out, Finding{e.Line, fmt.Sprintf(
+				f.add(CheckVersionOrder, e.Line,
 					"version %s does not come before %s, which is above it; entries run newest first",
-					e.Version[1:], prev.Version[1:])})
+					e.Version[1:], prev.Version[1:])
 			}
 			if e.Body == "" {
-				out = append(out, Finding{e.Line, fmt.Sprintf(
-					"version %s has no entries under it", e.Version[1:])})
+				f.add(CheckEmptyEntry, e.Line, "version %s has no entries under it", e.Version[1:])
 			}
 			prev = e
 		}
 		for _, s := range e.Sections {
 			if !allowed[s.Name] {
-				out = append(out, Finding{s.Line, fmt.Sprintf(
-					"section %q is not one of %v", s.Name, sections)})
+				f.add(CheckUnknownSection, s.Line, "section %q is not one of %v", s.Name, sections)
 			}
 		}
 	}
-	return out
+	return f.out
 }
 
 // isDate reports whether s is a YYYY-MM-DD calendar date.

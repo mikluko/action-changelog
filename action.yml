@@ -19,6 +19,26 @@ inputs:
       Changelog six: Added, Changed, Deprecated, Removed, Fixed, Security.
     required: false
     default: ""
+  error:
+    description: Comma-separated checks to raise as errors.
+    required: false
+    default: ""
+  warn:
+    description: Comma-separated checks to raise as warnings.
+    required: false
+    default: ""
+  # Quoted because YAML 1.1 reads a bare off as false, and the input has to
+  # survive whichever parser reads this file.
+  "off":
+    description: Comma-separated checks to switch off.
+    required: false
+    default: ""
+  fail-on:
+    description: >-
+      What turns the step red: error, warning, or never. Findings are reported
+      either way.
+    required: false
+    default: error
 
 runs:
   using: docker
@@ -33,3 +53,9 @@ runs:
     - -validate=${{ inputs.validate }}
     - -changelog=${{ inputs.changelog }}
     - -sections=${{ inputs.sections }}
+    - -error=${{ inputs.error }}
+    - -warn=${{ inputs.warn }}
+    # Bracketed because a hyphen reads as subtraction in an expression, and
+    # off is a property name a dotted path is better off not spelling.
+    - -off=${{ inputs['off'] }}
+    - -fail-on=${{ inputs['fail-on'] }}

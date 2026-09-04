@@ -28,6 +28,14 @@ jobs:
       # and a validator that cannot pass its own file has nothing to say.
       - name: Validate this repository's own changelog
         run: go run . -validate -changelog CHANGELOG.md
+      # The README's table of checks is generated from the register in code.
+      # Regenerating it here catches a check added without the documentation
+      # following, in the pull request that adds it.
+      - name: The README's table of checks is current
+        if: runner.os == 'Linux'
+        run: |
+          go run ./cmd/gen-readme
+          git diff --exit-code -- README.md
 
   image:
     runs-on: ubuntu-latest
