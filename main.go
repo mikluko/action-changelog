@@ -27,7 +27,6 @@ import (
 func main() {
 	var (
 		path       = flag.String("changelog", "CHANGELOG.md", "path to the changelog")
-		validate   = flag.Bool("validate", false, "report where the changelog departs from the format")
 		sections   = flag.String("sections", "", "comma-separated level-3 headings to accept; the Keep a Changelog six when empty")
 		asError    = flag.String("error", "", "comma-separated checks to raise as errors")
 		asWarning  = flag.String("warn", "", "comma-separated checks to raise as warnings")
@@ -42,12 +41,6 @@ func main() {
 		listRegister(os.Stdout)
 		return
 	}
-	if !*validate {
-		fmt.Fprintln(os.Stderr, "nothing to do: pass -validate")
-		flag.Usage()
-		os.Exit(2)
-	}
-
 	severities, err := severities(*asError, *asWarning, *asOff)
 	if err != nil {
 		fail(err)

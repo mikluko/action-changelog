@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fires on entries released long ago, which never stop being pre-releases, so a
   repository that had ever shipped a candidate would fail it forever.
 
+### Removed
+
+- The `-validate` flag and the `validate` input. Validating is what the tool
+  does, and it was the only mode left once the release ceremony moved out to
+  whatever consumes the outputs, so the flag had become a thing you had to type
+  to make the program do its job. Running it with no argument now validates
+  `CHANGELOG.md` and prints the outputs. `-fail-on never` still reports without
+  failing, and `-off` still silences a check, so nothing that flag could express
+  is lost.
+
 ### Fixed
 
 - The published image carries `linux/amd64` and `linux/arm64`. v1.0.0-rc1 was

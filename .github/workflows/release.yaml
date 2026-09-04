@@ -50,7 +50,7 @@ jobs:
       #
       - name: Read the changelog
         id: changelog
-        run: go run . -validate -changelog CHANGELOG.md
+        run: go run . -changelog CHANGELOG.md
 
       # The action reports; this decides. It is the only place a tag spelling is
       # chosen, which is why the action emits none.

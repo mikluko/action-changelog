@@ -34,7 +34,6 @@ belongs downstream, to whatever automation consumes that metadata.
 | Input | Default | Description |
 |---|---|---|
 | `changelog` | `CHANGELOG.md` | Path to the changelog, relative to the workspace. |
-| `validate` | `true` | Report where the changelog departs from the format. |
 | `sections` | *(empty)* | Comma-separated level-3 headings to accept. Empty accepts the Keep a Changelog six: Added, Changed, Deprecated, Removed, Fixed, Security. |
 | `error` | *(empty)* | Comma-separated checks to raise as errors. |
 | `warn` | *(empty)* | Comma-separated checks to raise as warnings. |
@@ -147,7 +146,8 @@ carry, so the example is executed rather than described.
 ## Local use
 
 ```
-go run github.com/mikluko/action-changelog@latest -validate -changelog CHANGELOG.md
+go run github.com/mikluko/action-changelog@latest
+go run github.com/mikluko/action-changelog@latest -changelog docs/CHANGELOG.md
 go run github.com/mikluko/action-changelog@latest -list-checks
 ```
 

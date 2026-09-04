@@ -9,10 +9,6 @@ inputs:
     description: Path to the changelog, relative to the workspace.
     required: false
     default: CHANGELOG.md
-  validate:
-    description: Report where the changelog departs from the format.
-    required: false
-    default: "true"
   sections:
     description: >-
       Comma-separated level-3 headings to accept. Empty accepts the Keep a
@@ -84,7 +80,6 @@ runs:
   # args is argv and never a shell line, so an input carrying a quote is one
   # argument rather than the end of one.
   args:
-    - -validate=${{ inputs.validate }}
     - -changelog=${{ inputs.changelog }}
     - -sections=${{ inputs.sections }}
     - -error=${{ inputs.error }}
