@@ -26,8 +26,9 @@ is already tagged. A changelog that falls behind its tags then blocks the
 pipeline rather than drifting quietly, which is the failure this exists to make
 impossible.
 
-It performs no release itself. It validates and reports; tagging and publishing
-belong to the workflow.
+It performs no release itself. It reports what it found — the version, its notes,
+whether that version is already tagged — and the ceremony belongs downstream, to
+whatever automation consumes that metadata.
 
 ## Inputs
 
