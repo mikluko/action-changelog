@@ -1,0 +1,5 @@
+# The README's check table is generated with LF and compared against the file on
+# disk, so a Windows checkout converting to CRLF fails that test on content that
+# is identical. Normalising every text file removes the class of problem rather
+# than teaching one comparison to ignore it.
+* text=auto eol=lf
