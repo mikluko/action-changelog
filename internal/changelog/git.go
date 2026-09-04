@@ -36,8 +36,13 @@ func (f *findings) git(c *Changelog, g *Git) {
 		return
 	}
 	if g.Err != nil {
+		// Two causes reach here and they want opposite remedies, so the message
+		// carries both and the parenthesis says which one this run met: a
+		// checkout that fetched no tags is fixed by fetching them, and a .git
+		// naming a git directory out of reach is fixed by putting it in reach.
 		f.add(CheckNoGitTags, 0,
-			"the tag history cannot be read (%v); check out with fetch-depth: 0 so the tag-dependent checks have tags to read",
+			"the tag history cannot be read (%v); check out with fetch-depth: 0 where the checkout is shallow, "+
+				"and bring the git directory into reach where .git names one this run cannot see",
 			g.Err)
 		return
 	}

@@ -71,6 +71,13 @@ A shallow checkout is the case this cannot see past: it carries the history it
 was given rather than the one that exists, so a reference it cannot reach fires
 `no-git-tags`, which names `fetch-depth: 0` as the fix.
 
+`no-git-tags` also fires where the repository is present and cannot be read. A
+linked worktree, a submodule and a container mount all reach the repository
+through a `.git` file naming a directory elsewhere, and where that directory is
+out of reach the tags are unreadable rather than absent. The finding names the
+cause it met, and the fix there is to bring that directory into reach rather
+than to fetch anything.
+
 ## Outputs
 
 | Output | Example | Description |
