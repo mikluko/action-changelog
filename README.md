@@ -50,6 +50,31 @@ repositories that use it as a heading pass it in `sections`.
 them takes the later spelling. A name no check carries is refused rather than
 ignored. `fail-on: never` reports every finding and exits 0.
 
+## Outputs
+
+| Output | Example | Description |
+|---|---|---|
+| `valid` | `true` | Whether the document conforms: `true` when nothing was found at error severity. Reported whatever `fail-on` is set to. |
+| `version` | `1.2.3` | The version the newest versioned entry names. |
+| `tag` | `v1.2.3` | The same version, tag-shaped. |
+| `previous` | `1.2.2` | The newest version tag the repository carries that is not `tag`. |
+| `previous-tag` | `v1.2.2` | That tag as the repository spells it, which is the ref to check out. |
+| `notes` | | The body of the newest versioned entry, verbatim. |
+| `already-tagged` | `false` | Whether a tag naming `version` already exists. |
+
+Both spellings are emitted so no workflow repeats the same string surgery. A
+document naming no version is still validated: `valid` and `already-tagged`
+answer, and `version`, `tag` and `notes` are empty.
+
+`previous` comes from the repository's tags rather than from the entry below the
+newest, because a changelog whose history begins partway through has no second
+entry to offer. Tags are compared by the version they name, so a repository
+tagging `1.2.3` is read the same as one tagging `v1.2.3`, and `tag` carries the
+`v` either way.
+
+The values are written to `$GITHUB_OUTPUT` and printed on stdout, which is where
+a local run reads them.
+
 ## Checks
 
 Each check carries a name, which appears in the finding and in the workflow

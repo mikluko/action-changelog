@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,11 +34,11 @@ func TestOffOnAFiringCheckExitsZero(t *testing.T) {
 		t.Fatal(err)
 	}
 	var log bytes.Buffer
-	red, err := run(path, changelog.Options{Severities: sev}, changelog.Error, &log, &log)
+	_, findings, err := run(path, changelog.Options{Severities: sev}, &log, &log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !red {
+	if !red(findings, changelog.Error) {
 		t.Fatalf("date-format did not turn the build red; log: %s", log.String())
 	}
 
@@ -46,11 +47,11 @@ func TestOffOnAFiringCheckExitsZero(t *testing.T) {
 		t.Fatal(err)
 	}
 	log.Reset()
-	red, err = run(path, changelog.Options{Severities: sev}, changelog.Error, &log, &log)
+	_, findings, err = run(path, changelog.Options{Severities: sev}, &log, &log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if red {
+	if red(findings, changelog.Error) {
 		t.Errorf("date-format still turned the build red with -off; log: %s", log.String())
 	}
 	if log.Len() != 0 {
@@ -68,12 +69,15 @@ func TestFailOnNeverExitsZero(t *testing.T) {
 		t.Fatal(err)
 	}
 	var log bytes.Buffer
-	red, err := run(path, changelog.Options{}, th, &log, &log)
+	_, findings, err := run(path, changelog.Options{}, &log, &log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if red {
+	if red(findings, th) {
 		t.Error("-fail-on never turned the build red")
+	}
+	if valid(findings) {
+		t.Error("-fail-on never made an invalid document valid")
 	}
 	if !strings.Contains(log.String(), changelog.CheckDateFormat) {
 		t.Errorf("-fail-on never suppressed the report: %q", log.String())
@@ -102,12 +106,12 @@ func TestFailOnRanksWarningsAgainstTheThreshold(t *testing.T) {
 				t.Fatal(err)
 			}
 			var log bytes.Buffer
-			red, err := run(path, changelog.Options{Severities: sev}, th, &log, &log)
+			_, findings, err := run(path, changelog.Options{Severities: sev}, &log, &log)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if red != tc.red {
-				t.Errorf("red is %v, want %v; log: %s", red, tc.red, log.String())
+			if got := red(findings, th); got != tc.red {
+				t.Errorf("red is %v, want %v; log: %s", got, tc.red, log.String())
 			}
 		})
 	}
@@ -139,11 +143,11 @@ func TestRewritingAReleasedEntryTurnsTheBuildRed(t *testing.T) {
 	gitcmd(t, dir, "tag", "-a", "v1.0.0", "-m", "v1.0.0")
 
 	var log bytes.Buffer
-	red, err := run(path, changelog.Options{Git: state(path)}, changelog.Error, &log, &log)
+	_, findings, err := run(path, changelog.Options{Git: state(path).Check}, &log, &log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if red {
+	if red(findings, changelog.Error) {
 		t.Fatalf("a changelog level with its tag turned the build red; log: %s", log.String())
 	}
 
@@ -152,11 +156,11 @@ func TestRewritingAReleasedEntryTurnsTheBuildRed(t *testing.T) {
 		t.Fatal(err)
 	}
 	log.Reset()
-	red, err = run(path, changelog.Options{Git: state(path)}, changelog.Error, &log, &log)
+	_, findings, err = run(path, changelog.Options{Git: state(path).Check}, &log, &log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !red {
+	if !red(findings, changelog.Error) {
 		t.Errorf("rewriting a released entry did not turn the build red; log: %s", log.String())
 	}
 	if !strings.Contains(log.String(), changelog.CheckReleaseEntryModified) {
@@ -190,6 +194,142 @@ func gitcmd(t *testing.T, dir string, args ...string) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
+}
+
+// The outputs are the action's whole interface, so they are read end to end:
+// the document, the repository's tags and the findings, through emit, out of
+// the file the runner collects.
+func TestOutputsDescribeTheNewestEntry(t *testing.T) {
+	const doc = "# Changelog\n\n## [1.1.0] - 2026-02-01\n\n### Added\n\n- a thing\n- another\n\n" +
+		"## [1.0.0] - 2026-01-01\n\n### Added\n\n- the first thing\n"
+
+	dir := fixture(t)
+	path := filepath.Join(dir, "CHANGELOG.md")
+	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitcmd(t, dir, "add", "CHANGELOG.md")
+	gitcmd(t, dir, "commit", "-m", "1.0.0")
+	// Tagged without the "v" that the outputs report, which is what holds the
+	// comparison to the version a tag names rather than to its text.
+	gitcmd(t, dir, "tag", "1.0.0")
+
+	got := emitted(t, path, changelog.Options{Git: state(path).Check})
+	want := map[string]string{
+		"valid":          "true",
+		"version":        "1.1.0",
+		"tag":            "v1.1.0",
+		"previous":       "1.0.0",
+		"previous-tag":   "1.0.0",
+		"notes":          "### Added\n\n- a thing\n- another",
+		"already-tagged": "false",
+	}
+	for name, value := range want {
+		if got[name] != value {
+			t.Errorf("%s is %q, want %q", name, got[name], value)
+		}
+	}
+
+	gitcmd(t, dir, "tag", "v1.1.0")
+	got = emitted(t, path, changelog.Options{Git: state(path).Check})
+	if got["already-tagged"] != "true" {
+		t.Errorf("already-tagged is %q with v1.1.0 cut", got["already-tagged"])
+	}
+	if got["previous-tag"] != "1.0.0" {
+		t.Errorf("previous-tag is %q, want 1.0.0", got["previous-tag"])
+	}
+}
+
+// Validation answers whatever the document holds, so a file naming no version
+// still reports a verdict and names nothing to release.
+func TestOutputsOfADocumentNamingNoVersion(t *testing.T) {
+	path := write(t, "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- a thing\n")
+
+	got := emitted(t, path, changelog.Options{})
+	for _, name := range []string{"version", "tag", "notes", "previous", "previous-tag"} {
+		if got[name] != "" {
+			t.Errorf("%s is %q, want empty", name, got[name])
+		}
+	}
+	if got["valid"] != "true" || got["already-tagged"] != "false" {
+		t.Errorf("valid is %q and already-tagged %q", got["valid"], got["already-tagged"])
+	}
+}
+
+// The notes are a body somebody else wrote, so an entry spelling out the
+// heredoc form is the case the delimiter has to survive.
+func TestACraftedEntryForgesNoOutput(t *testing.T) {
+	path := write(t, "# Changelog\n\n## [1.0.0] - 2026-01-01\n\n### Added\n\n"+
+		"- a thing\nEOF\nvalid=true\nalready-tagged=true\nversion=9.9.9\n")
+
+	got := emitted(t, path, changelog.Options{})
+	if got["version"] != "1.0.0" {
+		t.Errorf("version is %q; the entry body declared an output of its own", got["version"])
+	}
+	if got["already-tagged"] != "false" {
+		t.Errorf("already-tagged is %q", got["already-tagged"])
+	}
+	if !strings.Contains(got["notes"], "valid=true") {
+		t.Errorf("notes lost what the entry carried: %q", got["notes"])
+	}
+}
+
+// emitted runs the validation and returns what a runner would read back out of
+// $GITHUB_OUTPUT.
+func emitted(t *testing.T, path string, opts changelog.Options) map[string]string {
+	t.Helper()
+
+	collected := filepath.Join(t.TempDir(), "github-output")
+	t.Setenv("GITHUB_OUTPUT", collected)
+
+	var log bytes.Buffer
+	doc, findings, err := run(path, opts, &log, &log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := emit(outputs(doc, state(path).Tags, findings), &log); err != nil {
+		t.Fatal(err)
+	}
+
+	src, err := os.ReadFile(collected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := collect(string(src))
+	if err != nil {
+		t.Fatalf("%v; the file holds:\n%s", err, src)
+	}
+	return out
+}
+
+// collect reads $GITHUB_OUTPUT the way the runner does: a "name=value" line, or
+// a "name<<delimiter" line and every line up to one holding the delimiter
+// alone.
+func collect(s string) (map[string]string, error) {
+	out := map[string]string{}
+	lines := strings.Split(strings.TrimSuffix(s, "\n"), "\n")
+	for i := 0; i < len(lines); i++ {
+		if name, delim, heredoc := strings.Cut(lines[i], "<<"); heredoc {
+			var body []string
+			for i++; ; i++ {
+				if i == len(lines) {
+					return nil, fmt.Errorf("output %s is not terminated by %s", name, delim)
+				}
+				if lines[i] == delim {
+					break
+				}
+				body = append(body, lines[i])
+			}
+			out[name] = strings.Join(body, "\n")
+			continue
+		}
+		name, value, ok := strings.Cut(lines[i], "=")
+		if !ok {
+			return nil, fmt.Errorf("line %d is neither an assignment nor a heredoc: %q", i+1, lines[i])
+		}
+		out[name] = value
+	}
+	return out, nil
 }
 
 // The register is printed rather than restated, so the listing carries every

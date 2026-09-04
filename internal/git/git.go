@@ -32,6 +32,19 @@ type Tag struct {
 	Hash plumbing.Hash
 }
 
+// Version is the semver version the tag names, canonical and with its leading
+// "v", or empty for a tag naming no version.
+//
+// It is what two tags are compared by, so a repository tagging 1.2.3 is read
+// the same as one tagging v1.2.3.
+func (t Tag) Version() string {
+	v := canonical(t.Name)
+	if !semver.IsValid(v) {
+		return ""
+	}
+	return semver.Canonical(v)
+}
+
 // Repo is a read-only handle on a local repository.
 type Repo struct {
 	store *filesystem.Storage
@@ -171,12 +184,12 @@ func Newest(tags []Tag) (Tag, bool) {
 func Versions(tags []Tag) []Tag {
 	out := make([]Tag, 0, len(tags))
 	for _, t := range tags {
-		if semver.IsValid(canonical(t.Name)) {
+		if t.Version() != "" {
 			out = append(out, t)
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
-		return semver.Compare(canonical(out[i].Name), canonical(out[j].Name)) > 0
+		return semver.Compare(out[i].Version(), out[j].Version()) > 0
 	})
 	return out
 }

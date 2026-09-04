@@ -50,6 +50,49 @@ func TestVersionMatchesTheChangelog(t *testing.T) {
 	}
 }
 
+// An output a consuming workflow cannot reference is one the binary writes into
+// the void, so the declaration and what emit writes are held to each other.
+func TestActionDeclaresEveryOutput(t *testing.T) {
+	var action struct {
+		Inputs  map[string]yaml.Node `yaml:"inputs"`
+		Outputs map[string]struct {
+			Description string `yaml:"description"`
+		} `yaml:"outputs"`
+		Runs struct {
+			Args []string `yaml:"args"`
+		} `yaml:"runs"`
+	}
+	if err := yaml.Unmarshal(read(t, "action.yml"), &action); err != nil {
+		t.Fatal(err)
+	}
+	declared := action.Outputs
+
+	written := map[string]bool{}
+	for _, o := range outputs(changelog.Parse(nil), nil, nil) {
+		written[o.Name] = true
+		if _, ok := declared[o.Name]; !ok {
+			t.Errorf("action.yml declares no output %q", o.Name)
+		}
+	}
+	for name, o := range declared {
+		if !written[name] {
+			t.Errorf("action.yml declares an output %q nothing writes", name)
+		}
+		if o.Description == "" {
+			t.Errorf("output %q carries no description", name)
+		}
+	}
+
+	// An input reaches the binary as an argument and nowhere else, so one the
+	// args never name is a documented setting that does nothing.
+	args := strings.Join(action.Runs.Args, "\n")
+	for name := range action.Inputs {
+		if !strings.Contains(args, "inputs."+name) && !strings.Contains(args, "inputs['"+name+"']") {
+			t.Errorf("input %q reaches no argument", name)
+		}
+	}
+}
+
 func read(t *testing.T, name string) []byte {
 	t.Helper()
 	src, err := os.ReadFile(name)
