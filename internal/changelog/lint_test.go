@@ -7,7 +7,7 @@ import (
 
 func lint(t *testing.T, sections []string, lines ...string) []Finding {
 	t.Helper()
-	return Parse([]byte(strings.Join(lines, "\n"))).Lint(sections)
+	return Parse([]byte(strings.Join(lines, "\n"))).Lint(Options{Sections: sections})
 }
 
 func TestLintAcceptsAWellFormedDocument(t *testing.T) {
@@ -39,21 +39,25 @@ func TestLintFindings(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		lines []string
+		check string
 		want  string
 	}{
 		{
 			"heading is not a version",
 			[]string{"# Changelog", "", "## Release Two", "", "- a thing"},
+			CheckHeadingForm,
 			"neither [Unreleased] nor a version",
 		},
 		{
 			"version without a date",
 			[]string{"# Changelog", "", "## [1.0.0]", "", "- a thing"},
+			CheckHeadingForm,
 			"carries no date",
 		},
 		{
 			"date is not YYYY-MM-DD",
 			[]string{"# Changelog", "", "## [1.0.0] - 4 Sep 2026", "", "- a thing"},
+			CheckDateFormat,
 			"is not YYYY-MM-DD",
 		},
 		{
@@ -63,6 +67,7 @@ func TestLintFindings(t *testing.T) {
 				"## [1.0.0] - 2026-08-01", "", "- a thing", "",
 				"## [1.1.0] - 2026-09-04", "", "- another",
 			},
+			CheckVersionOrder,
 			"does not come before",
 		},
 		{
@@ -72,16 +77,19 @@ func TestLintFindings(t *testing.T) {
 				"## [1.0.0] - 2026-08-01", "", "- a thing", "",
 				"## [1.0.0] - 2026-07-01", "", "- another",
 			},
+			CheckVersionOrder,
 			"does not come before",
 		},
 		{
 			"version with no entries",
 			[]string{"# Changelog", "", "## [1.0.0] - 2026-08-01", "", "## [0.9.0] - 2026-07-01", "", "- a thing"},
+			CheckEmptyEntry,
 			"has no entries under it",
 		},
 		{
 			"section outside the vocabulary",
 			[]string{"# Changelog", "", "## [1.0.0] - 2026-08-01", "", "### Improved", "", "- a thing"},
+			CheckUnknownSection,
 			`section "Improved" is not one of`,
 		},
 	} {
@@ -91,9 +99,16 @@ func TestLintFindings(t *testing.T) {
 				t.Fatalf("no findings, want one matching %q", tc.want)
 			}
 			for _, f := range got {
-				if strings.Contains(f.Msg, tc.want) {
-					return
+				if !strings.Contains(f.Msg, tc.want) {
+					continue
 				}
+				if f.Check != tc.check {
+					t.Errorf("finding %v raised by %q, want %q", f, f.Check, tc.check)
+				}
+				if f.Severity != Error {
+					t.Errorf("finding %v at %s, want error by default", f, f.Severity)
+				}
+				return
 			}
 			t.Errorf("findings %v, want one matching %q", got, tc.want)
 		})
