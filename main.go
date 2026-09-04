@@ -50,7 +50,7 @@ func main() {
 	}
 
 	opts := changelog.Options{Sections: split(*sections), Severities: severities}
-	red, err := run(*path, opts, threshold)
+	red, err := run(*path, opts, threshold, os.Stderr, os.Stdout)
 	if err != nil {
 		fail(err)
 	}
@@ -66,7 +66,10 @@ func fail(err error) {
 
 // run validates the document and reports whether anything it found is bad
 // enough to turn the build red.
-func run(path string, opts changelog.Options, threshold changelog.Severity) (bool, error) {
+//
+// Findings go to log, and under GitHub Actions each is repeated on annotations
+// as a workflow command carrying the check's name as its title.
+func run(path string, opts changelog.Options, threshold changelog.Severity, log, annotations io.Writer) (bool, error) {
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return false, err
@@ -75,9 +78,9 @@ func run(path string, opts changelog.Options, threshold changelog.Severity) (boo
 
 	var red bool
 	for _, f := range changelog.Parse(src).Lint(opts) {
-		fmt.Fprintf(os.Stderr, "%s:%d: %s: %s (%s)\n", path, f.Line, f.Severity, f.Msg, f.Check)
+		fmt.Fprintf(log, "%s:%d: %s: %s (%s)\n", path, f.Line, f.Severity, f.Msg, f.Check)
 		if annotate {
-			fmt.Printf("::%s file=%s,line=%d,title=%s::%s\n", f.Severity, path, f.Line, f.Check, f.Msg)
+			fmt.Fprintf(annotations, "::%s file=%s,line=%d,title=%s::%s\n", f.Severity, path, f.Line, f.Check, f.Msg)
 		}
 		if threshold != changelog.Off && f.Severity >= threshold {
 			red = true

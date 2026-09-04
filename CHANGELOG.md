@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Every check carries a name — `heading-form`, `date-format`, `version-order`,
+  `empty-entry`, `unknown-section` — which appears in the finding and as the
+  title of the workflow annotation.
+- `-error`, `-warn` and `-off` move a named check between severities, and
+  `-fail-on error|warning|never` decides what turns the step red.
+- `-list-checks` prints the register of checks, and the README's table is
+  generated from that same register.
+
 ## [0.1.0] - 2026-09-04
 
 ### Added

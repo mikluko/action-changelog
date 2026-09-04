@@ -20,15 +20,41 @@ only to pull its own image.
 | `changelog` | `CHANGELOG.md` | Path to the changelog, relative to the workspace. |
 | `validate` | `true` | Report where the changelog departs from the format. |
 | `sections` | *(empty)* | Comma-separated level-3 headings to accept. Empty accepts the Keep a Changelog six: Added, Changed, Deprecated, Removed, Fixed, Security. |
+| `error` | *(empty)* | Comma-separated checks to raise as errors. |
+| `warn` | *(empty)* | Comma-separated checks to raise as warnings. |
+| `off` | *(empty)* | Comma-separated checks to switch off. |
+| `fail-on` | `error` | What turns the step red: `error`, `warning`, or `never`. |
 
 `Breaking` is not in the default vocabulary. Keep a Changelog 2.0.0 marks a
 breaking change inline as `**Breaking:**` inside the section it belongs to;
 repositories that use it as a heading pass it in `sections`.
 
+`error`, `warn` and `off` are applied in that order, so a check named in two of
+them takes the later spelling. A name no check carries is refused rather than
+ignored. `fail-on: never` reports every finding and exits 0.
+
+## Checks
+
+Each check carries a name, which appears in the finding and in the workflow
+annotation, and which is what `error`, `warn` and `off` take.
+
+<!-- checks:start -->
+
+| Check | Default | Description |
+|---|---|---|
+| `heading-form` | `error` | An entry heading states a version and a date, as in [1.2.3] - 2006-01-02. |
+| `date-format` | `error` | An entry's date is written YYYY-MM-DD. |
+| `version-order` | `error` | Entries run newest first, each version strictly below the one above it. |
+| `empty-entry` | `error` | A released entry carries something under it. |
+| `unknown-section` | `error` | A level-3 heading is one of the accepted section vocabulary. |
+
+<!-- checks:end -->
+
 ## Local use
 
 ```
 go run github.com/mikluko/action-changelog@latest -validate -changelog CHANGELOG.md
+go run github.com/mikluko/action-changelog@latest -list-checks
 ```
 
 ## Releasing
