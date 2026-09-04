@@ -153,6 +153,31 @@ func TestParseSectionsAndLatest(t *testing.T) {
 	}
 }
 
+// The definitions sit at the foot of the document rather than under the entry
+// they name, and they stay out of every entry's body.
+func TestParseMatchesLinkReferenceDefinitionsToEntries(t *testing.T) {
+	src := []byte(strings.Join([]string{
+		"# Changelog", "",
+		"## [1.1.0] - 2026-09-04", "", "### Added", "", "- a thing", "",
+		"## [1.0.0] - 2026-08-01", "", "### Fixed", "", "- a bug", "",
+		"[1.1.0]: https://example.test/compare/v1.0.0...v1.1.0",
+	}, "\n"))
+
+	entries := Parse(src).Released()
+	if n := len(entries); n != 2 {
+		t.Fatalf("entries = %d, want 2", n)
+	}
+	if !entries[0].LinkRef {
+		t.Error("1.1.0 has no LinkRef, want one")
+	}
+	if entries[1].LinkRef {
+		t.Error("1.0.0 has a LinkRef, want none")
+	}
+	if strings.Contains(entries[1].Body, "example.test") {
+		t.Errorf("1.0.0 body carries the definition: %q", entries[1].Body)
+	}
+}
+
 func equal(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
