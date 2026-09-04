@@ -218,11 +218,9 @@ func TestOutputsDescribeTheNewestEntry(t *testing.T) {
 	want := map[string]string{
 		"valid":          "true",
 		"version":        "1.1.0",
-		"tag":            "v1.1.0",
-		"previous":       "1.0.0",
-		"previous-tag":   "1.0.0",
 		"notes":          "### Added\n\n- a thing\n- another",
 		"already-tagged": "false",
+		"latest-tag":     "1.0.0",
 	}
 	for name, value := range want {
 		if got[name] != value {
@@ -230,13 +228,16 @@ func TestOutputsDescribeTheNewestEntry(t *testing.T) {
 		}
 	}
 
+	// latest-tag is the repository's newest tag and not the one below the
+	// version, so cutting the release moves it onto the release. Nothing strips
+	// the "v" the repository wrote.
 	gitcmd(t, dir, "tag", "v1.1.0")
 	got = emitted(t, path, changelog.Options{Git: state(path).Check})
 	if got["already-tagged"] != "true" {
 		t.Errorf("already-tagged is %q with v1.1.0 cut", got["already-tagged"])
 	}
-	if got["previous-tag"] != "1.0.0" {
-		t.Errorf("previous-tag is %q, want 1.0.0", got["previous-tag"])
+	if got["latest-tag"] != "v1.1.0" {
+		t.Errorf("latest-tag is %q, want v1.1.0", got["latest-tag"])
 	}
 }
 
@@ -246,7 +247,7 @@ func TestOutputsOfADocumentNamingNoVersion(t *testing.T) {
 	path := write(t, "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- a thing\n")
 
 	got := emitted(t, path, changelog.Options{})
-	for _, name := range []string{"version", "tag", "notes", "previous", "previous-tag"} {
+	for _, name := range []string{"version", "notes", "latest-tag"} {
 		if got[name] != "" {
 			t.Errorf("%s is %q, want empty", name, got[name])
 		}
