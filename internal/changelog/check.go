@@ -50,6 +50,11 @@ const (
 	CheckVersionOrder   = "version-order"
 	CheckEmptyEntry     = "empty-entry"
 	CheckUnknownSection = "unknown-section"
+
+	CheckNoGitTags               = "no-git-tags"
+	CheckVersionBehindTag        = "version-behind-tag"
+	CheckReleaseEntryModified    = "release-entry-modified"
+	CheckPrereleaseEntryModified = "prerelease-entry-modified"
 )
 
 // Check is one thing the linter looks for.
@@ -90,6 +95,26 @@ var Checks = []Check{
 	{
 		Name:        CheckUnknownSection,
 		Description: "A level-3 heading is one of the accepted section vocabulary.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckNoGitTags,
+		Description: "The repository's tag history can be read, which every check below needs.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckVersionBehindTag,
+		Description: "The newest entry is not behind the newest tag.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckReleaseEntryModified,
+		Description: "A released entry is unchanged since the newest tag.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckPrereleaseEntryModified,
+		Description: "A released pre-release entry is unchanged since the newest tag.",
 		Default:     Error,
 	},
 }

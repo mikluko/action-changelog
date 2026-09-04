@@ -148,6 +148,43 @@ func TestOpenSearchesUpwards(t *testing.T) {
 	}
 }
 
+func TestShallowSeparatesADepthFromAnEmptyHistory(t *testing.T) {
+	origin := tagged(t)
+
+	deep, err := git.Open(origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shallow, err := deep.Shallow(); err != nil || shallow {
+		t.Errorf("the origin reads shallow=%v, err=%v; want false", shallow, err)
+	}
+
+	// A depth-1 clone is what a checkout that fetched no tags leaves behind:
+	// the tags exist at the origin and this copy carries none of them.
+	dir := t.TempDir()
+	clone := filepath.Join(dir, "clone")
+	run(t, dir, "clone", "--depth", "1", "--no-tags", "file://"+filepath.ToSlash(origin), clone)
+
+	r, err := git.Open(clone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shallow, err := r.Shallow()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !shallow {
+		t.Error("a depth-1 clone does not read as shallow")
+	}
+	tags, err := r.Tags()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tags) != 0 {
+		t.Errorf("the clone carries tags %v, want none", tags)
+	}
+}
+
 func TestOpenReportsWhereThereIsNoRepository(t *testing.T) {
 	if _, err := git.Open(t.TempDir()); err == nil {
 		t.Error("opening a directory under no repository succeeded")

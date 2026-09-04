@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -120,6 +121,74 @@ func TestUnknownCheckNamesAreRefused(t *testing.T) {
 		if _, err := threshold(s); err == nil {
 			t.Errorf("-fail-on accepted %q", s)
 		}
+	}
+}
+
+// The tag-dependent checks are wired end to end against a repository rather
+// than a stub, because what they are for is reading git state.
+func TestRewritingAReleasedEntryTurnsTheBuildRed(t *testing.T) {
+	const released = "# Changelog\n\n## [1.0.0] - 2026-01-01\n\n### Added\n\n- a thing\n"
+
+	dir := fixture(t)
+	path := filepath.Join(dir, "CHANGELOG.md")
+	if err := os.WriteFile(path, []byte(released), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitcmd(t, dir, "add", "CHANGELOG.md")
+	gitcmd(t, dir, "commit", "-m", "1.0.0")
+	gitcmd(t, dir, "tag", "-a", "v1.0.0", "-m", "v1.0.0")
+
+	var log bytes.Buffer
+	red, err := run(path, changelog.Options{Git: state(path)}, changelog.Error, &log, &log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if red {
+		t.Fatalf("a changelog level with its tag turned the build red; log: %s", log.String())
+	}
+
+	rewritten := strings.Replace(released, "- a thing", "- another thing entirely", 1)
+	if err := os.WriteFile(path, []byte(rewritten), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	log.Reset()
+	red, err = run(path, changelog.Options{Git: state(path)}, changelog.Error, &log, &log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !red {
+		t.Errorf("rewriting a released entry did not turn the build red; log: %s", log.String())
+	}
+	if !strings.Contains(log.String(), changelog.CheckReleaseEntryModified) {
+		t.Errorf("the finding is not %s: %s", changelog.CheckReleaseEntryModified, log.String())
+	}
+}
+
+// fixture initialises an empty repository whose commits do not depend on the
+// machine's git configuration.
+func fixture(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not on PATH")
+	}
+	dir := t.TempDir()
+	gitcmd(t, dir, "init", "-b", "main")
+	gitcmd(t, dir, "config", "user.name", "Fixture")
+	gitcmd(t, dir, "config", "user.email", "fixture@example.invalid")
+	return dir
+}
+
+func gitcmd(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"GIT_CONFIG_GLOBAL="+os.DevNull,
+		"GIT_CONFIG_SYSTEM="+os.DevNull,
+		"GIT_CONFIG_NOSYSTEM=1",
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }
 

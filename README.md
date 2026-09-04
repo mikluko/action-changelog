@@ -47,8 +47,32 @@ annotation, and which is what `error`, `warn` and `off` take.
 | `version-order` | `error` | Entries run newest first, each version strictly below the one above it. |
 | `empty-entry` | `error` | A released entry carries something under it. |
 | `unknown-section` | `error` | A level-3 heading is one of the accepted section vocabulary. |
+| `no-git-tags` | `error` | The repository's tag history can be read, which every check below needs. |
+| `version-behind-tag` | `error` | The newest entry is not behind the newest tag. |
+| `release-entry-modified` | `error` | A released entry is unchanged since the newest tag. |
+| `prerelease-entry-modified` | `error` | A released pre-release entry is unchanged since the newest tag. |
 
 <!-- checks:end -->
+
+The last four read the repository's tags, so the checkout has to carry them:
+
+```yaml
+- uses: actions/checkout@v5
+  with:
+    fetch-depth: 0
+```
+
+`no-git-tags` reports a checkout that does not. A complete history holding no
+tag is not that: the repository has made no release, and the three checks below
+it have nothing to compare against and say nothing.
+
+`release-entry-modified` and `prerelease-entry-modified` compare the entries
+against the changelog as it stood at the newest tag. An entry that changed
+fires, an entry that is gone fires, and an entry that was not there before does
+not, because filling in history nobody recorded is a repair rather than a
+rewrite. They are two checks so that a repository which collapses `1.2.0-rc.1`
+and `1.2.0-rc.2` into the `1.2.0` entry can switch the pre-release one off and
+keep the other.
 
 ## Local use
 

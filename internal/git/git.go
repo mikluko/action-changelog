@@ -35,7 +35,12 @@ type Tag struct {
 // Repo is a read-only handle on a local repository.
 type Repo struct {
 	store *filesystem.Storage
+	root  string
 }
+
+// Root is the working tree's top directory, which is what a path inside a tag's
+// tree is relative to.
+func (r *Repo) Root() string { return r.root }
 
 // Open returns a handle on the repository containing dir, searching dir and
 // then each parent for a .git.
@@ -44,11 +49,25 @@ type Repo struct {
 // commondir is followed from there: tags and objects live in the common
 // directory, and the worktree-local gitdir carries neither.
 func Open(dir string) (*Repo, error) {
-	dot, err := discover(dir)
+	root, dot, err := discover(dir)
 	if err != nil {
 		return nil, err
 	}
-	return &Repo{store: filesystem.NewStorage(osfs.New(dot), cache.NewObjectLRUDefault())}, nil
+	return &Repo{
+		store: filesystem.NewStorage(osfs.New(dot), cache.NewObjectLRUDefault()),
+		root:  root,
+	}, nil
+}
+
+// Shallow reports whether the repository was cloned to a depth, which is what
+// a checkout that fetched no tags looks like from inside: the tags exist and
+// the clone does not carry them.
+func (r *Repo) Shallow() (bool, error) {
+	hashes, err := r.store.Shallow()
+	if err != nil {
+		return false, err
+	}
+	return len(hashes) > 0, nil
 }
 
 // Tags returns every tag the repository carries, annotated and lightweight
@@ -175,29 +194,28 @@ func canonical(v string) string {
 	return "v" + v[1:]
 }
 
-// discover returns the path of the directory holding the repository's refs and
-// objects, searching dir and each of its parents.
-func discover(dir string) (string, error) {
+// discover searches dir and each of its parents for a repository, returning the
+// working tree's top directory and the directory holding its refs and objects.
+func discover(dir string) (root, dot string, err error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	for {
-		dot := filepath.Join(abs, ".git")
-		info, err := os.Stat(dot)
-		switch {
-		case err == nil && info.IsDir():
-			return common(dot)
-		case err == nil:
-			target, err := gitdir(dot)
-			if err != nil {
-				return "", err
+		candidate := filepath.Join(abs, ".git")
+		info, err := os.Stat(candidate)
+		if err == nil {
+			if !info.IsDir() {
+				if candidate, err = gitdir(candidate); err != nil {
+					return "", "", err
+				}
 			}
-			return common(target)
+			dot, err := common(candidate)
+			return abs, dot, err
 		}
 		parent := filepath.Dir(abs)
 		if parent == abs {
-			return "", fmt.Errorf("no git repository at or above %s", dir)
+			return "", "", fmt.Errorf("no git repository at or above %s", dir)
 		}
 		abs = parent
 	}

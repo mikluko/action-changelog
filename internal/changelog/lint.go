@@ -39,13 +39,18 @@ type Options struct {
 	// Severities is the severity in force per check; DefaultSeverities is
 	// used when it is nil. A check at Off raises nothing.
 	Severities Severities
+	// Git is what the repository says about its tags. Nil runs none of the
+	// checks that read it.
+	Git *Git
 }
 
-// Lint reports every way c departs from the format, in document order.
+// Lint reports every way c departs from the format, the findings about the
+// document in document order and those about the repository after them.
 //
-// An empty result means no check above Off had anything to say, not that the
-// newest entry is releasable: whether that version is a legal step past what is
-// already tagged is a question about the repository, not about the file.
+// An empty result means no check above Off had anything to say. What the file
+// alone can be held to is all that is checked unless opts.Git is set: the
+// checks that compare it against the repository's tags need the caller to have
+// read them.
 func (c *Changelog) Lint(opts Options) []Finding {
 	sections := opts.Sections
 	if len(sections) == 0 {
@@ -92,6 +97,7 @@ func (c *Changelog) Lint(opts Options) []Finding {
 			}
 		}
 	}
+	f.git(c, opts.Git)
 	return f.out
 }
 
