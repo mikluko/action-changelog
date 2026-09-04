@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/mikluko/action-changelog/internal/changelog"
+	"github.com/mikluko/action-changelog/internal/git"
 )
 
 // A changelog with one departure: the date is not YYYY-MM-DD.
@@ -143,7 +144,7 @@ func TestRewritingAReleasedEntryTurnsTheBuildRed(t *testing.T) {
 	gitcmd(t, dir, "tag", "-a", "v1.0.0", "-m", "v1.0.0")
 
 	var log bytes.Buffer
-	_, findings, err := run(path, changelog.Options{Git: state(path).Check}, &log, &log)
+	_, findings, err := run(path, changelog.Options{Git: state(path, git.Final).Check}, &log, &log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +157,7 @@ func TestRewritingAReleasedEntryTurnsTheBuildRed(t *testing.T) {
 		t.Fatal(err)
 	}
 	log.Reset()
-	_, findings, err = run(path, changelog.Options{Git: state(path).Check}, &log, &log)
+	_, findings, err = run(path, changelog.Options{Git: state(path, git.Final).Check}, &log, &log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,6 +166,59 @@ func TestRewritingAReleasedEntryTurnsTheBuildRed(t *testing.T) {
 	}
 	if !strings.Contains(log.String(), changelog.CheckReleaseEntryModified) {
 		t.Errorf("the finding is not %s: %s", changelog.CheckReleaseEntryModified, log.String())
+	}
+}
+
+// A release candidate cut above the newest entry is the case -reference-tags
+// exists for: under the default it is not a baseline, so a conforming changelog
+// is not reported as behind it, and a repository that does want it says so.
+func TestAReleaseCandidateIsNoBaselineUnderTheDefault(t *testing.T) {
+	const doc = "# Changelog\n\n## [2.1.0] - 2026-02-01\n\n### Added\n\n- a thing\n"
+
+	dir := fixture(t)
+	path := filepath.Join(dir, "CHANGELOG.md")
+	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitcmd(t, dir, "add", "CHANGELOG.md")
+	gitcmd(t, dir, "commit", "-m", "2.1.0")
+	gitcmd(t, dir, "tag", "v2.1.0")
+
+	// The candidate rides on a later commit, so it is reachable and higher than
+	// the release below it. Nothing about the changelog moved with it.
+	if err := os.WriteFile(filepath.Join(dir, "NOTES.md"), []byte("staging the candidate\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitcmd(t, dir, "add", "NOTES.md")
+	gitcmd(t, dir, "commit", "-m", "stage 2.2.0-rc.1")
+	gitcmd(t, dir, "tag", "v2.2.0-rc.1")
+
+	for _, tc := range []struct {
+		admit git.Eligible
+		want  string
+		red   bool
+	}{
+		{git.Final, "v2.1.0", false},
+		{git.All, "v2.2.0-rc.1", true},
+	} {
+		t.Run(tc.admit.String(), func(t *testing.T) {
+			repo := state(path, tc.admit)
+			if repo.Reference != tc.want {
+				t.Errorf("the reference is %q, want %q", repo.Reference, tc.want)
+			}
+
+			var log bytes.Buffer
+			_, findings, err := run(path, changelog.Options{Git: repo.Check}, &log, &log)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := red(findings, changelog.Error); got != tc.red {
+				t.Errorf("red is %v, want %v; log: %s", got, tc.red, log.String())
+			}
+			if tc.red && !strings.Contains(log.String(), changelog.CheckVersionBehindTag) {
+				t.Errorf("the finding is not %s: %s", changelog.CheckVersionBehindTag, log.String())
+			}
+		})
 	}
 }
 
@@ -214,7 +268,7 @@ func TestOutputsDescribeTheNewestEntry(t *testing.T) {
 	// comparison to the version a tag names rather than to its text.
 	gitcmd(t, dir, "tag", "1.0.0")
 
-	got := emitted(t, path, changelog.Options{Git: state(path).Check})
+	got := emitted(t, path, state(path, git.Final))
 	want := map[string]string{
 		"valid":          "true",
 		"version":        "1.1.0",
@@ -232,7 +286,7 @@ func TestOutputsDescribeTheNewestEntry(t *testing.T) {
 	// version, so cutting the release moves it onto the release. Nothing strips
 	// the "v" the repository wrote.
 	gitcmd(t, dir, "tag", "v1.1.0")
-	got = emitted(t, path, changelog.Options{Git: state(path).Check})
+	got = emitted(t, path, state(path, git.Final))
 	if got["already-tagged"] != "true" {
 		t.Errorf("already-tagged is %q with v1.1.0 cut", got["already-tagged"])
 	}
@@ -246,7 +300,7 @@ func TestOutputsDescribeTheNewestEntry(t *testing.T) {
 func TestOutputsOfADocumentNamingNoVersion(t *testing.T) {
 	path := write(t, "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- a thing\n")
 
-	got := emitted(t, path, changelog.Options{})
+	got := emitted(t, path, repoState{})
 	for _, name := range []string{"version", "notes", "latest-tag"} {
 		if got[name] != "" {
 			t.Errorf("%s is %q, want empty", name, got[name])
@@ -263,7 +317,7 @@ func TestACraftedEntryForgesNoOutput(t *testing.T) {
 	path := write(t, "# Changelog\n\n## [1.0.0] - 2026-01-01\n\n### Added\n\n"+
 		"- a thing\nEOF\nvalid=true\nalready-tagged=true\nversion=9.9.9\n")
 
-	got := emitted(t, path, changelog.Options{})
+	got := emitted(t, path, repoState{})
 	if got["version"] != "1.0.0" {
 		t.Errorf("version is %q; the entry body declared an output of its own", got["version"])
 	}
@@ -277,18 +331,18 @@ func TestACraftedEntryForgesNoOutput(t *testing.T) {
 
 // emitted runs the validation and returns what a runner would read back out of
 // $GITHUB_OUTPUT.
-func emitted(t *testing.T, path string, opts changelog.Options) map[string]string {
+func emitted(t *testing.T, path string, repo repoState) map[string]string {
 	t.Helper()
 
 	collected := filepath.Join(t.TempDir(), "github-output")
 	t.Setenv("GITHUB_OUTPUT", collected)
 
 	var log bytes.Buffer
-	doc, findings, err := run(path, opts, &log, &log)
+	doc, findings, err := run(path, changelog.Options{Git: repo.Check}, &log, &log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := emit(outputs(doc, state(path).Tags, findings), &log); err != nil {
+	if err := emit(outputs(doc, repo.Tags, repo.Reference, findings), &log); err != nil {
 		t.Fatal(err)
 	}
 

@@ -9,6 +9,7 @@
 package git
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/cache"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/go-git/go-git/v5/storage/filesystem"
 	"golang.org/x/mod/semver"
 )
@@ -167,17 +169,121 @@ func (r *Repo) commit(h plumbing.Hash) (*object.Commit, error) {
 	return nil, fmt.Errorf("tag object %s does not reach a commit", h)
 }
 
-// Newest returns the tag naming the highest semver version, and reports false
-// when none of them names a version at all.
-//
-// Tags that are not versions are ignored rather than refused: a repository is
-// free to carry tags this tool has no opinion about.
-func Newest(tags []Tag) (Tag, bool) {
-	versions := Versions(tags)
-	if len(versions) == 0 {
-		return Tag{}, false
+// Eligible says which tags may serve as the reference tag.
+type Eligible int
+
+const (
+	// Final admits only tags naming a version with no pre-release part.
+	Final Eligible = iota
+	// All admits every tag naming a version.
+	All
+)
+
+// String is the spelling ParseEligible reads.
+func (e Eligible) String() string {
+	if e == All {
+		return "all"
 	}
-	return versions[0], true
+	return "final"
+}
+
+// ParseEligible reads the -reference-tags value, and reports an error naming
+// both spellings for anything else.
+func ParseEligible(s string) (Eligible, error) {
+	switch strings.TrimSpace(s) {
+	case "final":
+		return Final, nil
+	case "all":
+		return All, nil
+	}
+	return Final, fmt.Errorf("-reference-tags %q is not one of final, all", s)
+}
+
+// Reference returns the newest eligible version tag reachable from HEAD, which
+// is what git describe --tags names, and reports false where the checkout
+// reaches no such tag.
+//
+// Reachability takes no option, because a tag on a branch this checkout is not
+// on is never the right baseline. It is what lets a maintained support line
+// read its own newest tag: the other line's tag is simply unreachable.
+//
+// Tags that are not versions are ignored rather than refused, and so is a tag
+// whose commit the checkout does not carry: a repository is free to hold tags
+// this tool has no opinion about, and a baseline that cannot be read is not one.
+func (r *Repo) Reference(tags []Tag, admit Eligible) (Tag, bool, error) {
+	candidates := Versions(tags)
+	if admit == Final {
+		candidates = final(candidates)
+	}
+	if len(candidates) == 0 {
+		return Tag{}, false, nil
+	}
+
+	// Resolving each candidate up front makes the walk below one map lookup per
+	// commit rather than one ancestry query per tag. Where two tags name the
+	// same commit the higher version wins, candidates being highest first.
+	rank := make(map[plumbing.Hash]int, len(candidates))
+	for i, t := range candidates {
+		commit, err := r.commit(t.Hash)
+		if err != nil {
+			continue
+		}
+		if _, ok := rank[commit.Hash]; !ok {
+			rank[commit.Hash] = i
+		}
+	}
+
+	head, err := storer.ResolveReference(r.store, plumbing.HEAD)
+	if err != nil {
+		if errors.Is(err, plumbing.ErrReferenceNotFound) {
+			return Tag{}, false, nil
+		}
+		return Tag{}, false, err
+	}
+	if _, err := object.GetCommit(r.store, head.Hash()); err != nil {
+		return Tag{}, false, fmt.Errorf("HEAD at %s: %w", head.Hash(), err)
+	}
+
+	// The walk stops the moment the highest candidate is reached, so a checkout
+	// standing at or just past its newest tag pays for the commits in between
+	// and no more. Nothing else can improve on rank 0.
+	best := len(candidates)
+	seen := make(map[plumbing.Hash]bool)
+	queue := []plumbing.Hash{head.Hash()}
+	for len(queue) > 0 && best != 0 {
+		h := queue[0]
+		queue = queue[1:]
+		if seen[h] {
+			continue
+		}
+		seen[h] = true
+		if i, ok := rank[h]; ok && i < best {
+			best = i
+		}
+		commit, err := object.GetCommit(r.store, h)
+		if err != nil {
+			// A shallow checkout's boundary commit names parents it does not
+			// carry, and there is nothing below it to reach.
+			continue
+		}
+		queue = append(queue, commit.ParentHashes...)
+	}
+	if best == len(candidates) {
+		return Tag{}, false, nil
+	}
+	return candidates[best], true, nil
+}
+
+// final drops the tags naming a pre-release version, which is what costs a
+// repository that never tags one nothing.
+func final(tags []Tag) []Tag {
+	out := make([]Tag, 0, len(tags))
+	for _, t := range tags {
+		if semver.Prerelease(t.Version()) == "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // Versions returns the tags naming a semver version, highest first.
