@@ -1,0 +1,29 @@
+name: Changelog
+
+# The main-branch invocation. It differs from the pull-request one in a single
+# input: prerelease-entry is raised to an error here, because a pre-release
+# entry that reaches the default branch is a policy breach, and left off there,
+# because a release pull request is where such a heading would legitimately be
+# under discussion.
+on:
+  push:
+    branches: [main]
+
+# The action reports and writes nothing, so it needs no token beyond the one
+# the checkout uses.
+permissions:
+  contents: read
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The tag-dependent checks read the repository's tags, and a default
+          # checkout carries none: no-git-tags fires and names this line.
+          fetch-depth: 0
+      - uses: mikluko/action-changelog@v0
+        with:
+          sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
+          error: prerelease-entry
