@@ -1,0 +1,291 @@
+// Package changelog parses Keep a Changelog documents into their version
+// entries and checks that a document conforms to the format the release
+// ceremony reads.
+//
+// Parsing goes through a Markdown parser rather than line matching: a fenced
+// code block containing what looks like a heading is content, not structure.
+package changelog
+
+import (
+	"bytes"
+	"strings"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/text"
+	"golang.org/x/mod/semver"
+)
+
+// Section is a level-3 heading under an entry, such as "Added".
+type Section struct {
+	Name string
+	Line int
+}
+
+// Entry is one level-2 heading of a changelog together with everything under
+// it, up to the next level-2 heading.
+//
+// Version is empty for the Unreleased entry and for a heading that does not
+// state a parseable version: Unreleased distinguishes the two.
+type Entry struct {
+	Raw        string
+	Version    string
+	Date       string
+	Unreleased bool
+	Sections   []Section
+	Body       string
+	Line       int
+}
+
+// Changelog is a parsed document. Entries keep document order, so the first
+// released entry is the one a release ceremony acts on.
+type Changelog struct {
+	Title   string
+	Entries []Entry
+}
+
+// Released returns the entries that name a version, in document order.
+func (c *Changelog) Released() []Entry {
+	out := make([]Entry, 0, len(c.Entries))
+	for _, e := range c.Entries {
+		if e.Version != "" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// Latest returns the first entry naming a version, which is the one the
+// release ceremony publishes. It reports false for a document holding none.
+func (c *Changelog) Latest() (Entry, bool) {
+	for _, e := range c.Entries {
+		if e.Version != "" {
+			return e, true
+		}
+	}
+	return Entry{}, false
+}
+
+// Find returns the entry for version, which may be given with or without the
+// leading "v".
+func (c *Changelog) Find(version string) (Entry, bool) {
+	want := canonical(version)
+	for _, e := range c.Entries {
+		if e.Version != "" && e.Version == want {
+			return e, true
+		}
+	}
+	return Entry{}, false
+}
+
+// Parse reads a Keep a Changelog document. Malformed headings become entries
+// with an empty Version and a populated Raw, so Lint can report them by line
+// rather than the parse failing as a whole.
+func Parse(src []byte) *Changelog {
+	root := goldmark.New().Parser().Parse(text.NewReader(src))
+
+	var (
+		out      Changelog
+		headings []*ast.Heading
+	)
+	for n := root.FirstChild(); n != nil; n = n.NextSibling() {
+		h, ok := n.(*ast.Heading)
+		if !ok {
+			continue
+		}
+		switch h.Level {
+		case 1:
+			if out.Title == "" {
+				out.Title = headingText(src, h)
+			}
+		case 2:
+			headings = append(headings, h)
+		}
+	}
+
+	for i, h := range headings {
+		var next ast.Node
+		if i+1 < len(headings) {
+			next = headings[i+1]
+		}
+		e := Entry{
+			Raw:  headingText(src, h),
+			Line: lineOf(src, headingStart(src, h)),
+		}
+		e.Version, e.Date, e.Unreleased = parseHeading(e.Raw)
+		e.Sections, e.Body = collect(src, h, next)
+		out.Entries = append(out.Entries, e)
+	}
+	return &out
+}
+
+// collect walks the nodes between an entry's heading and the next one,
+// returning its level-3 sections and the source they span.
+//
+// The span stops at the last node rather than at the next heading, and link
+// reference definitions are skipped outright: the "[1.2.3]: …compare…" block at
+// the foot of a Keep a Changelog document belongs to the document, not to the
+// release notes of whichever entry happens to be last.
+func collect(src []byte, from, to ast.Node) ([]Section, string) {
+	var (
+		sections   []Section
+		start, end = -1, -1
+	)
+	for n := from.NextSibling(); n != nil && n != to; n = n.NextSibling() {
+		if n.Kind() == ast.KindLinkReferenceDefinition {
+			continue
+		}
+		if h, ok := n.(*ast.Heading); ok && h.Level == 3 {
+			sections = append(sections, Section{
+				Name: headingText(src, h),
+				Line: lineOf(src, headingStart(src, h)),
+			})
+		}
+		s, e, ok := span(n)
+		if !ok {
+			continue
+		}
+		if start < 0 || s < start {
+			start = s
+		}
+		if e > end {
+			end = e
+		}
+	}
+	if start < 0 {
+		return sections, ""
+	}
+	// A heading's span excludes the "### " that introduces it, so the body is
+	// taken from the start of that line rather than from the span itself.
+	return sections, strings.TrimSpace(string(src[lineStart(src, start):end]))
+}
+
+// span reports the source range a node covers, recursing into children for the
+// container nodes whose own Lines() are empty.
+//
+// Inline nodes are skipped: Lines panics on them, and the block that holds
+// them already spans their source.
+func span(n ast.Node) (start, end int, ok bool) {
+	if n.Type() == ast.TypeInline {
+		return 0, 0, false
+	}
+	if l := n.Lines(); l.Len() > 0 {
+		start, end = l.At(0).Start, l.At(l.Len()-1).Stop
+		ok = true
+	}
+	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+		s, e, o := span(c)
+		if !o {
+			continue
+		}
+		if !ok || s < start {
+			start = s
+		}
+		if !ok || e > end {
+			end = e
+		}
+		ok = true
+	}
+	return start, end, ok
+}
+
+// headingText returns a heading's line as written, without its "#" markers.
+//
+// It reads the source rather than the heading's inline children because
+// "## [1.2.3]" parses as a link when a matching reference definition sits at
+// the foot of the document and as literal text when it does not, and the two
+// yield different text.
+func headingText(src []byte, h *ast.Heading) string {
+	start := headingStart(src, h)
+	if start < 0 {
+		return ""
+	}
+	end := lineEnd(src, start)
+	line := strings.TrimSpace(string(src[start:end]))
+	line = strings.TrimLeft(line, "#")
+	return strings.TrimSpace(strings.TrimRight(line, "# \t"))
+}
+
+// headingStart returns the offset of the first byte of a heading's line.
+func headingStart(src []byte, h *ast.Heading) int {
+	if h == nil {
+		return -1
+	}
+	l := h.Lines()
+	if l.Len() == 0 {
+		// A heading with no inline content still occupies a line, but goldmark
+		// records no segment for it. Nothing downstream can place it.
+		return -1
+	}
+	return lineStart(src, l.At(0).Start)
+}
+
+func lineStart(src []byte, off int) int {
+	if off > len(src) {
+		off = len(src)
+	}
+	if i := bytes.LastIndexByte(src[:off], '\n'); i >= 0 {
+		return i + 1
+	}
+	return 0
+}
+
+func lineEnd(src []byte, off int) int {
+	if i := bytes.IndexByte(src[off:], '\n'); i >= 0 {
+		return off + i
+	}
+	return len(src)
+}
+
+func lineOf(src []byte, off int) int {
+	if off < 0 {
+		return 0
+	}
+	if off > len(src) {
+		off = len(src)
+	}
+	return bytes.Count(src[:off], []byte("\n")) + 1
+}
+
+// parseHeading reads an entry heading of the form "[1.2.3] - 2026-09-04" or
+// "[Unreleased]". Brackets are optional, and so is the date.
+func parseHeading(raw string) (version, date string, unreleased bool) {
+	name, rest := splitHeading(raw)
+	if strings.EqualFold(name, "unreleased") {
+		return "", strings.TrimSpace(rest), true
+	}
+	v := canonical(name)
+	if !semver.IsValid(v) || semver.Canonical(v) != v {
+		return "", "", false
+	}
+	return v, strings.TrimSpace(rest), false
+}
+
+// splitHeading separates the version token from whatever follows it: the text
+// inside brackets when they are present, otherwise the first field.
+func splitHeading(raw string) (name, rest string) {
+	raw = strings.TrimSpace(raw)
+	if strings.HasPrefix(raw, "[") {
+		if i := strings.IndexByte(raw, ']'); i > 0 {
+			return raw[1:i], strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(raw[i+1:]), "-"))
+		}
+		return "", ""
+	}
+	name, after, found := strings.Cut(raw, " ")
+	if !found {
+		return raw, ""
+	}
+	return name, strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(after), "-"))
+}
+
+// canonical adds the "v" that golang.org/x/mod/semver requires.
+func canonical(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return ""
+	}
+	if v[0] != 'v' && v[0] != 'V' {
+		return "v" + v
+	}
+	return "v" + v[1:]
+}

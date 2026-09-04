@@ -1,0 +1,166 @@
+package changelog
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestParseHeadingForms(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		in         string
+		version    string
+		date       string
+		unreleased bool
+	}{
+		{"bracketed with date", "[1.2.3] - 2026-09-04", "v1.2.3", "2026-09-04", false},
+		{"bracketed no date", "[1.2.3]", "v1.2.3", "", false},
+		{"bare with date", "1.2.3 - 2026-09-04", "v1.2.3", "2026-09-04", false},
+		{"v prefix", "[v1.2.3] - 2026-09-04", "v1.2.3", "2026-09-04", false},
+		{"unreleased", "[Unreleased]", "", "", true},
+		{"unreleased bare", "Unreleased", "", "", true},
+		{"prerelease", "[1.2.3-rc.1] - 2026-09-04", "v1.2.3-rc.1", "2026-09-04", false},
+		{"not a version", "[Yanked] - 2026-09-04", "", "", false},
+		{"partial version", "[1.2] - 2026-09-04", "", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v, d, u := parseHeading(tc.in)
+			if v != tc.version || d != tc.date || u != tc.unreleased {
+				t.Errorf("parseHeading(%q) = (%q, %q, %v), want (%q, %q, %v)",
+					tc.in, v, d, u, tc.version, tc.date, tc.unreleased)
+			}
+		})
+	}
+}
+
+// A version-like line inside a fenced block is content. This is the case that
+// makes a Markdown parser worth the dependency: line matching reads it as a
+// heading and splits the entry in two.
+func TestParseIgnoresFencedHeadings(t *testing.T) {
+	src := []byte(strings.Join([]string{
+		"# Changelog",
+		"",
+		"## [1.1.0] - 2026-09-04",
+		"",
+		"### Added",
+		"",
+		"- a worked example of the format:",
+		"",
+		"  ```markdown",
+		"  ## [9.9.9] - 1999-01-01",
+		"  ```",
+		"",
+		"## [1.0.0] - 2026-08-01",
+		"",
+		"### Added",
+		"",
+		"- the first release",
+		"",
+		"[1.1.0]: https://example.test/compare/v1.0.0...v1.1.0",
+		"[1.0.0]: https://example.test/releases/v1.0.0",
+	}, "\n"))
+
+	c := Parse(src)
+	got := make([]string, 0, len(c.Entries))
+	for _, e := range c.Entries {
+		got = append(got, e.Version)
+	}
+	if want := []string{"v1.1.0", "v1.0.0"}; !equal(got, want) {
+		t.Fatalf("versions = %v, want %v", got, want)
+	}
+	if c.Title != "Changelog" {
+		t.Errorf("title = %q, want %q", c.Title, "Changelog")
+	}
+}
+
+// The link reference definitions at the foot belong to the document, not to
+// the last entry's release notes.
+func TestParseBodyExcludesLinkDefinitions(t *testing.T) {
+	src := []byte(strings.Join([]string{
+		"# Changelog",
+		"",
+		"## [1.0.0] - 2026-08-01",
+		"",
+		"### Added",
+		"",
+		"- the first release",
+		"",
+		"[1.0.0]: https://example.test/releases/v1.0.0",
+	}, "\n"))
+
+	c := Parse(src)
+	e, ok := c.Latest()
+	if !ok {
+		t.Fatal("no released entry")
+	}
+	if strings.Contains(e.Body, "https://example.test") {
+		t.Errorf("body carries the link definitions:\n%s", e.Body)
+	}
+	if !strings.Contains(e.Body, "the first release") {
+		t.Errorf("body lost its content:\n%s", e.Body)
+	}
+	if want := "### Added"; !strings.HasPrefix(e.Body, want) {
+		t.Errorf("body = %q, want it to start with %q", e.Body, want)
+	}
+}
+
+func TestParseSectionsAndLatest(t *testing.T) {
+	src := []byte(strings.Join([]string{
+		"# Changelog",
+		"",
+		"## [Unreleased]",
+		"",
+		"## [1.1.0] - 2026-09-04",
+		"",
+		"### Added",
+		"",
+		"- a thing",
+		"",
+		"### Fixed",
+		"",
+		"- a bug",
+		"",
+		"## [1.0.0] - 2026-08-01",
+		"",
+		"### Added",
+		"",
+		"- the first release",
+	}, "\n"))
+
+	c := Parse(src)
+	if n := len(c.Entries); n != 3 {
+		t.Fatalf("entries = %d, want 3", n)
+	}
+	if !c.Entries[0].Unreleased {
+		t.Error("first entry is not Unreleased")
+	}
+	// Latest skips Unreleased: the ceremony releases a named version.
+	e, ok := c.Latest()
+	if !ok || e.Version != "v1.1.0" {
+		t.Fatalf("Latest() = (%q, %v), want v1.1.0", e.Version, ok)
+	}
+	if n := len(e.Sections); n != 2 {
+		t.Fatalf("sections = %d, want 2", n)
+	}
+	if e.Sections[0].Name != "Added" || e.Sections[1].Name != "Fixed" {
+		t.Errorf("sections = %q, %q", e.Sections[0].Name, e.Sections[1].Name)
+	}
+	if got, ok := c.Find("1.0.0"); !ok || got.Version != "v1.0.0" {
+		t.Errorf("Find(1.0.0) = (%q, %v)", got.Version, ok)
+	}
+	if n := len(c.Released()); n != 2 {
+		t.Errorf("Released() = %d, want 2", n)
+	}
+}
+
+func equal(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
