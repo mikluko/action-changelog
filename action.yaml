@@ -9,10 +9,6 @@ inputs:
     description: Path to the changelog, relative to the workspace.
     required: false
     default: CHANGELOG.md
-  validate:
-    description: Report where the changelog departs from the format.
-    required: false
-    default: "true"
   sections:
     description: >-
       Comma-separated level-3 headings to accept. Empty accepts the Keep a
@@ -58,6 +54,13 @@ outputs:
     description: The body of the newest versioned entry, verbatim. Empty when the document names no version.
   already-tagged:
     description: Whether a tag naming `version` already exists in the repository.
+  prerelease:
+    description: >-
+      Whether the version the newest entry names carries a pre-release part, as
+      in 1.2.3-rc1. A fact about that entry, where the prerelease-entry check is
+      a judgement about the whole document: this says nothing about entries
+      already released, which never stop being pre-releases. False when the
+      document names no version.
   latest-tag:
     description: >-
       The reference tag, as the repository spells it, which is the ref a
@@ -68,15 +71,15 @@ outputs:
 
 runs:
   using: docker
-  # The tag is the release this file was committed in, which is what VERSION
-  # names and what TestVersionMatchesTheChangelog holds to the tag being cut. A
-  # workflow pinning this action by SHA therefore runs the image built for the
-  # release that commit belongs to, with nothing rewritten after the fact.
-  image: docker://ghcr.io/mikluko/action-changelog:v1.0.0-rc1
+  # The tag is the release this file was committed in, which is what
+  # TestVersionMatchesTheChangelog holds to the changelog's newest entry and to
+  # the tag being cut. A workflow pinning this action by SHA therefore runs the
+  # image built for the release that commit belongs to, with nothing rewritten
+  # after the fact.
+  image: docker://ghcr.io/mikluko/action-changelog:v1.0.0
   # args is argv and never a shell line, so an input carrying a quote is one
   # argument rather than the end of one.
   args:
-    - -validate=${{ inputs.validate }}
     - -changelog=${{ inputs.changelog }}
     - -sections=${{ inputs.sections }}
     - -error=${{ inputs.error }}

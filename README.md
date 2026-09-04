@@ -34,7 +34,6 @@ belongs downstream, to whatever automation consumes that metadata.
 | Input | Default | Description |
 |---|---|---|
 | `changelog` | `CHANGELOG.md` | Path to the changelog, relative to the workspace. |
-| `validate` | `true` | Report where the changelog departs from the format. |
 | `sections` | *(empty)* | Comma-separated level-3 headings to accept. Empty accepts the Keep a Changelog six: Added, Changed, Deprecated, Removed, Fixed, Security. |
 | `error` | *(empty)* | Comma-separated checks to raise as errors. |
 | `warn` | *(empty)* | Comma-separated checks to raise as warnings. |
@@ -80,12 +79,19 @@ was given rather than the one that exists, so a reference it cannot reach fires
 | `version` | `1.2.3` | The version the newest versioned entry names. |
 | `notes` | | The body of the newest versioned entry, verbatim. |
 | `already-tagged` | `false` | Whether a tag naming `version` already exists. |
+| `prerelease` | `false` | Whether `version` carries a pre-release part, as in `1.2.3-rc1`. |
 | `latest-tag` | `v1.2.2` | The reference tag, as the repository spells it. |
 
 Every output is something the action read. None of them proposes a tag: how a
 repository spells its tags belongs to whatever cuts them, so a workflow wanting
 a ref reads `latest-tag` and a workflow cutting a new one writes the spelling it
 has chosen.
+
+`prerelease` is a fact about the newest entry, where the `prerelease-entry`
+check is a judgement about the whole document. A workflow gating on what it is
+about to release wants the fact: the check also fires on entries released long
+ago, which never stop being pre-releases, so a repository that has ever shipped
+a candidate would fail that check forever.
 
 `latest-tag` is [the reference tag](#the-reference-tag), so `already-tagged` says
 which case a consumer is in: the previous release while it is `false`, and the
@@ -140,7 +146,8 @@ carry, so the example is executed rather than described.
 ## Local use
 
 ```
-go run github.com/mikluko/action-changelog@latest -validate -changelog CHANGELOG.md
+go run github.com/mikluko/action-changelog@latest
+go run github.com/mikluko/action-changelog@latest -changelog docs/CHANGELOG.md
 go run github.com/mikluko/action-changelog@latest -list-checks
 ```
 

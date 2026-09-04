@@ -27,7 +27,6 @@ import (
 func main() {
 	var (
 		path       = flag.String("changelog", "CHANGELOG.md", "path to the changelog")
-		validate   = flag.Bool("validate", false, "report where the changelog departs from the format")
 		sections   = flag.String("sections", "", "comma-separated level-3 headings to accept; the Keep a Changelog six when empty")
 		asError    = flag.String("error", "", "comma-separated checks to raise as errors")
 		asWarning  = flag.String("warn", "", "comma-separated checks to raise as warnings")
@@ -42,12 +41,6 @@ func main() {
 		listRegister(os.Stdout)
 		return
 	}
-	if !*validate {
-		fmt.Fprintln(os.Stderr, "nothing to do: pass -validate")
-		flag.Usage()
-		os.Exit(2)
-	}
-
 	severities, err := severities(*asError, *asWarning, *asOff)
 	if err != nil {
 		fail(err)
@@ -211,8 +204,10 @@ func state(path string, admit git.Eligible) repoState {
 // releasable.
 func outputs(doc *changelog.Changelog, tags []git.Tag, reference string, findings []changelog.Finding) []output.Output {
 	var version, notes, want string
+	var prerelease bool
 	if latest, ok := doc.Latest(); ok {
 		version, notes, want = strings.TrimPrefix(latest.Version, "v"), latest.Body, semver.Canonical(latest.Version)
+		prerelease = semver.Prerelease(latest.Version) != ""
 	}
 
 	return []output.Output{
@@ -221,6 +216,11 @@ func outputs(doc *changelog.Changelog, tags []git.Tag, reference string, finding
 		{Name: "notes", Value: notes},
 		{Name: "already-tagged", Value: strconv.FormatBool(tagged(tags, want))},
 		{Name: "latest-tag", Value: reference},
+		// A fact about the newest entry, where the prerelease-entry check is a
+		// judgement about the whole document. A workflow gating on what it is
+		// about to release wants the fact: the check also fires on entries long
+		// since released, which never stop being pre-releases.
+		{Name: "prerelease", Value: strconv.FormatBool(prerelease)},
 	}
 }
 

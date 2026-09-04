@@ -9,14 +9,16 @@ on:
 permissions:
   contents: read
 
+env:
+  IMAGE: ghcr.io/mikluko/action-changelog
+  # A fixed ref rather than a per-branch one, because GitHub's Actions cache is
+  # branch-scoped: a cache written on a pull request is not readable from main,
+  # which is exactly the direction the reuse has to travel.
+  CACHE: ghcr.io/mikluko/action-changelog:buildcache
+
 jobs:
   test:
-    # The action runs on Linux only, but the validator is also run directly with
-    # `go run`, so the code is held to every platform it claims to compile on.
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -29,7 +31,6 @@ jobs:
       # Regenerating it here catches a check added without the documentation
       # following, in the pull request that adds it.
       - name: The README's table of checks is current
-        if: runner.os == 'Linux'
         run: |
           go run ./cmd/gen-readme
           git diff --exit-code -- README.md
@@ -47,27 +48,96 @@ jobs:
           go-version-file: go.mod
 
       # Built from source, so a pull request is checked by the code it changes
-      # rather than by the last release of that code. Findings land as workflow
-      # annotations on the offending line of the diff.
+      # rather than by the last release of that code. prerelease-entry stays off
+      # here: a release candidate is what a pull request is allowed to name, and
+      # main is where it is refused.
       - name: Validate the changelog
         id: changelog
-        run: go run . -validate -changelog CHANGELOG.md
+        run: go run . -changelog CHANGELOG.md
 
-      # A release pull request should say so in its own checks. The workflow on
-      # main cuts whatever the changelog names, so a reviewer is entitled to know
-      # what merging does before they merge it.
-      #
       # The values reach the script through the environment and never through
       # ${{ }} expansion: they come from a file the pull request author wrote.
-      - name: What merging would cut
+      - name: What this pull request would publish
         if: always() && steps.changelog.outcome != 'skipped'
         env:
           VERSION: ${{ steps.changelog.outputs.version }}
           TAGGED: ${{ steps.changelog.outputs.already-tagged }}
-          LATEST: ${{ steps.changelog.outputs.latest-tag }}
+          PRERELEASE: ${{ steps.changelog.outputs.prerelease }}
         run: |
-          if [ "$TAGGED" = false ] && [ -n "$VERSION" ]; then
-            echo "Merging cuts **v$VERSION**, over ${LATEST:-no previous tag}." >>"$GITHUB_STEP_SUMMARY"
+          if [ -z "$VERSION" ]; then
+            echo "The changelog names no version." >>"$GITHUB_STEP_SUMMARY"
+          elif [ "$PRERELEASE" = true ]; then
+            echo "Publishes the candidate **v$VERSION**. Promote it to a final version before merging: main refuses a pre-release." >>"$GITHUB_STEP_SUMMARY"
+          elif [ "$TAGGED" = false ]; then
+            echo "Merging cuts **v$VERSION**." >>"$GITHUB_STEP_SUMMARY"
           else
-            echo "No release: the newest entry is already tagged, or the changelog names none." >>"$GITHUB_STEP_SUMMARY"
+            echo "No release: **v$VERSION** is already tagged." >>"$GITHUB_STEP_SUMMARY"
           fi
+
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    # A fork's GITHUB_TOKEN is read-only, so it cannot push. The build itself is
+    # still proven by the test job compiling the same code.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read the changelog
+        id: changelog
+        run: go run . -changelog CHANGELOG.md
+
+      # Every build publishes under the commit sha, whatever the changelog says.
+      # The build is what proves the code, and pushing it fills the cache ref so
+      # the build on main is a retag rather than a build.
+      #
+      # A release candidate additionally gets its own version tag, so it can be
+      # pulled and tested while the pull request is open. That is the only thing
+      # the changelog changes here: it appends a tag, it does not decide whether
+      # to build.
+      - name: What to publish this as
+        id: as
+        env:
+          VERSION: ${{ steps.changelog.outputs.version }}
+          PRERELEASE: ${{ steps.changelog.outputs.prerelease }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          {
+            echo "tags<<TAGS"
+            echo "$IMAGE:sha-${SHA:0:12}"
+            if [ "$PRERELEASE" = true ]; then
+              echo "$IMAGE:v$VERSION"
+            fi
+            echo "TAGS"
+          } >>"$GITHUB_OUTPUT"
+
+      # Both platforms, because the release publishes both and an architecture
+      # that breaks only there breaks once the tag already exists.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.as.outputs.tags }}
+          cache-from: type=registry,ref=${{ env.CACHE }}
+          cache-to: type=registry,ref=${{ env.CACHE }},mode=max
+
+      - name: What was published
+        env:
+          TAGS: ${{ steps.as.outputs.tags }}
+        run: |
+          echo "Published for linux/amd64 and linux/arm64:" >>"$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$TAGS" | sed 's/^/- `/; s/$/`/' >>"$GITHUB_STEP_SUMMARY"
