@@ -1,0 +1,23 @@
+name: Changelog
+
+# The pull-request invocation. It is the main-branch one with prerelease-entry
+# left at its default, which is off: nothing in the binary knows what a pull
+# request is, and nothing needs to.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The tag-dependent checks read the repository's tags, and a default
+          # checkout carries none: no-git-tags fires and names this line.
+          fetch-depth: 0
+      - uses: mikluko/action-changelog@v0
+        with:
+          sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking

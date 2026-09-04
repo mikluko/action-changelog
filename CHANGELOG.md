@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   carrying none, `version-behind-tag` reports a newest entry behind the newest
   tag, and `release-entry-modified` and `prerelease-entry-modified` report a
   released entry that has changed or gone since that tag.
+- `examples/` carries one worked policy: a changelog written to it, the
+  main-branch and pull-request workflow invocations that enforce it, and a
+  deliberately broken copy. `go test ./...` validates both documents under the
+  inputs those workflows carry.
 
 ## [0.1.0] - 2026-09-04
 

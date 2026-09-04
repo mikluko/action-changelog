@@ -99,6 +99,13 @@ annotation, and which is what `error`, `warn` and `off` take.
 
 <!-- checks:end -->
 
+## A worked policy
+
+[`examples/`](examples/) carries one complete policy: a changelog written to
+it, the two workflow invocations that enforce it, and a deliberately broken
+copy. `go test ./...` validates all of it under the inputs those workflows
+carry, so the example is executed rather than described.
+
 ## Local use
 
 ```
