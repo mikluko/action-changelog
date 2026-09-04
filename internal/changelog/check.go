@@ -54,6 +54,12 @@ const (
 	CheckDateFuture      = "date-future"
 	CheckPartialLinkRef  = "partial-link-refs"
 	CheckPrereleaseEntry = "prerelease-entry"
+
+	// These four read the repository rather than the document alone.
+	CheckNoGitTags               = "no-git-tags"
+	CheckVersionBehindTag        = "version-behind-tag"
+	CheckReleaseEntryModified    = "release-entry-modified"
+	CheckPrereleaseEntryModified = "prerelease-entry-modified"
 )
 
 // Check is one thing the linter looks for.
@@ -119,6 +125,26 @@ var Checks = []Check{
 		Name:        CheckPrereleaseEntry,
 		Description: "Policy: no entry names a pre-release version. Off by default; pre-release headings are legal.",
 		Default:     Off,
+	},
+	{
+		Name:        CheckNoGitTags,
+		Description: "The repository's tag history can be read, which every check below needs.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckVersionBehindTag,
+		Description: "The newest entry is not behind the newest tag.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckReleaseEntryModified,
+		Description: "A released entry is unchanged since the newest tag.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckPrereleaseEntryModified,
+		Description: "A released pre-release entry is unchanged since the newest tag.",
+		Default:     Error,
 	},
 }
 

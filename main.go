@@ -7,14 +7,17 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/mikluko/action-changelog/internal/changelog"
+	"github.com/mikluko/action-changelog/internal/git"
 )
 
 func main() {
@@ -49,7 +52,11 @@ func main() {
 		fail(err)
 	}
 
-	opts := changelog.Options{Sections: split(*sections), Severities: severities}
+	opts := changelog.Options{
+		Sections:   split(*sections),
+		Severities: severities,
+		Git:        state(*path),
+	}
 	red, err := run(*path, opts, threshold, os.Stderr, os.Stdout)
 	if err != nil {
 		fail(err)
@@ -87,6 +94,65 @@ func run(path string, opts changelog.Options, threshold changelog.Severity, log,
 		}
 	}
 	return red, nil
+}
+
+// state reads what the tag-dependent checks compare against: the newest version
+// tag of the repository holding the changelog, and the changelog as it stood
+// there.
+//
+// Every way that reading can fail is a populated Err rather than a returned
+// error, because failing to read the history is itself one of the checks and is
+// reported by name at the severity the caller configured.
+func state(path string) *changelog.Git {
+	repo, err := git.Open(filepath.Dir(path))
+	if err != nil {
+		return &changelog.Git{Err: err}
+	}
+	tags, err := repo.Tags()
+	if err != nil {
+		return &changelog.Git{Err: err}
+	}
+	newest, ok := git.Newest(tags)
+	if !ok {
+		// A shallow clone carries the history it was given rather than the one
+		// that exists, so the absence of tags says nothing about the repository
+		// and everything about the checkout. A complete history holding no tag
+		// is a repository before its first release, which is not a defect.
+		shallow, err := repo.Shallow()
+		if err != nil {
+			return &changelog.Git{Err: err}
+		}
+		if shallow {
+			return &changelog.Git{Err: errors.New("the checkout is shallow and carries no tags")}
+		}
+		return &changelog.Git{}
+	}
+
+	out := &changelog.Git{NewestTag: newest.Name}
+	rel, err := repoRelative(repo.Root(), path)
+	if err != nil {
+		return out
+	}
+	// A tag cut before the file existed, or before it moved here, carries no
+	// such blob. There is nothing to compare and nothing to report.
+	if src, err := repo.FileAt(newest.Name, rel); err == nil {
+		out.TaggedChangelog = src
+	}
+	return out
+}
+
+// repoRelative rewrites a path on this machine as the slash-separated path a
+// git tree stores.
+func repoRelative(root, path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(root, abs)
+	if err != nil {
+		return "", err
+	}
+	return filepath.ToSlash(rel), nil
 }
 
 // severities resolves the register's defaults against the three override flags.

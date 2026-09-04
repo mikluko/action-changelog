@@ -67,6 +67,10 @@ annotation, and which is what `error`, `warn` and `off` take.
 | `date-future` | `error` | No entry is dated later than today. |
 | `partial-link-refs` | `error` | Every versioned entry has a link reference definition, once any entry does. |
 | `prerelease-entry` | `off` | Policy: no entry names a pre-release version. Off by default; pre-release headings are legal. |
+| `no-git-tags` | `error` | The repository's tag history can be read, which every check below needs. |
+| `version-behind-tag` | `error` | The newest entry is not behind the newest tag. |
+| `release-entry-modified` | `error` | A released entry is unchanged since the newest tag. |
+| `prerelease-entry-modified` | `error` | A released pre-release entry is unchanged since the newest tag. |
 
 <!-- checks:end -->
 

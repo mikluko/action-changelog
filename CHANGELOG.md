@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   none.
 - `prerelease-entry` reports a pre-release version heading. It encodes a policy
   rather than catching a defect, so it is the one check that is off by default.
+- Four checks that read the repository's tags: `no-git-tags` reports a checkout
+  carrying none, `version-behind-tag` reports a newest entry behind the newest
+  tag, and `release-entry-modified` and `prerelease-entry-modified` report a
+  released entry that has changed or gone since that tag.
 
 ## [0.1.0] - 2026-09-04
 
