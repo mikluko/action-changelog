@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`unreadable-version`, a check of its own for an entry heading naming no
+  version that can be read**, at `error`, which leaves `heading-form` the shape
+  question its name is about. One check was doing both jobs and only one of them
+  is a policy: `heading-form` is about the form of a heading, which a repository
+  may reasonably differ on and switch off, and switching it off also switched
+  off the only thing standing between a heading nothing can read and a release
+  described from the wrong entry. It is the split `undated-entry` and
+  `undated-release` made, for the same reason. Sixteen checks.
+
 ### Fixed
 
 - **The `release-branch` example cuts the version its changelog names, and
@@ -25,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   requests would refuse the shape the strategy is built on. The cost is that the
   check judges the whole document, so the branch cannot report a stale candidate
   below the newest entry either.
+- Where the newest entry's heading names no version that can be read, `version`
+  and `notes` report nothing rather than describing the entry below it. That
+  entry was being read as the newest, so a workflow reading those cut a tag for
+  the wrong release and published the previous release's notes under it. Nothing
+  under such a heading is the newest entry, and reporting nothing is what a
+  document naming no version already does, so a workflow guarding on an empty
+  `version` lands on the path it already has. `already-tagged` and `prerelease`
+  answer `false` beside it, as they do for a document naming no version.
 
 ## [1.1.0] - 2026-09-05
 
