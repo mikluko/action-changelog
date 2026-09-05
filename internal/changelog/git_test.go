@@ -135,9 +135,83 @@ func TestGitChecks(t *testing.T) {
 			doc:  strings.Replace(tagged, "- The first thing.", "- Rewritten freely.", 1),
 			git:  &changelog.Git{ReferenceTag: "v0.2.0"},
 		},
+		{
+			name: "an undated entry no tag names is a release still being written",
+			doc:  undated,
+			git:  &changelog.Git{ReferenceTag: "v0.1.0", Tags: []string{"v0.1.0"}},
+			want: []string{changelog.CheckUndatedEntry},
+		},
+		{
+			name: "an undated entry a tag already names is a release nobody dated",
+			doc:  undated,
+			git:  &changelog.Git{ReferenceTag: "v0.2.0", Tags: []string{"v0.1.0", "v0.2.0"}},
+			want: []string{changelog.CheckUndatedRelease},
+		},
+		{
+			name: "the tag naming it need not be the reference",
+			doc:  undated,
+			git:  &changelog.Git{Tags: []string{"v0.2.0"}},
+			want: []string{changelog.CheckUndatedRelease},
+		},
+		{
+			name: "a tag written without its v names the release just the same",
+			doc:  undated,
+			git:  &changelog.Git{ReferenceTag: "0.2.0", Tags: []string{"0.2.0"}},
+			want: []string{changelog.CheckUndatedRelease},
+		},
+		{
+			name: "tags nobody could read accuse nobody of shipping it undated",
+			doc:  undated,
+			git:  &changelog.Git{Err: errors.New("no git repository")},
+			want: []string{changelog.CheckUndatedEntry, changelog.CheckNoGitTags},
+		},
+		{
+			name: "a caller offering no repository reads it as still being written",
+			doc:  undated,
+			git:  nil,
+			want: []string{changelog.CheckUndatedEntry},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := checks(changelog.Parse([]byte(tc.doc)).Lint(changelog.Options{Git: tc.git}))
+			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Errorf("checks fired %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// undated is the tagged document with the date struck from its newest entry.
+// A release still accumulating on a branch of its own leaves it in that state
+// and so does a release nobody dated, and only the tags tell the two apart.
+var undated = strings.Replace(tagged, "## [0.2.0] - 2026-02-01", "## [0.2.0]", 1)
+
+// The two are separately overridable, which is the whole of the split: a branch
+// accumulating a release switches undated-entry off, and a release that shipped
+// without its date is still reported on that same invocation.
+func TestUndatedChecksAreSeparatelyConfigurable(t *testing.T) {
+	sev := changelog.DefaultSeverities()
+	if err := sev.Set(changelog.CheckUndatedEntry, changelog.Off); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		git  *changelog.Git
+		want []string
+	}{
+		{
+			"a version a tag already names",
+			&changelog.Git{ReferenceTag: "v0.2.0", Tags: []string{"v0.2.0"}},
+			[]string{changelog.CheckUndatedRelease},
+		},
+		{
+			"a version no tag names yet",
+			&changelog.Git{ReferenceTag: "v0.1.0", Tags: []string{"v0.1.0"}},
+			nil,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := checks(changelog.Parse([]byte(undated)).Lint(changelog.Options{Severities: sev, Git: tc.git}))
 			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
 				t.Errorf("checks fired %v, want %v", got, tc.want)
 			}

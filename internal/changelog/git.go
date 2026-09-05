@@ -23,6 +23,31 @@ type Git struct {
 	// TaggedChangelog is the changelog as it stood at ReferenceTag, nil where
 	// that tag carries no such file.
 	TaggedChangelog []byte
+	// Tags is every tag the repository carries, spelled as it writes them.
+	// It is the whole set rather than ReferenceTag alone, because a release is
+	// tagged whether or not the tag naming it is reachable from HEAD, which is
+	// the same set already-tagged is answered from.
+	Tags []string
+}
+
+// tag returns the tag naming version, as the repository spells it, or "" where
+// no tag does. Tags are compared by the version they name, so a repository
+// tagging 1.2.3 answers for a heading reading 1.2.3 as one tagging v1.2.3 would.
+//
+// A nil Git offered no repository and a populated Err is a history that could
+// not be read. Neither is evidence that a tag exists, so both answer "": a run
+// that could not read the tags reports no-git-tags by name and accuses nobody of
+// having shipped a release it left undated.
+func (g *Git) tag(version string) string {
+	if g == nil || g.Err != nil || version == "" {
+		return ""
+	}
+	for _, name := range g.Tags {
+		if semver.Canonical(canonical(name)) == version {
+			return name
+		}
+	}
+	return ""
 }
 
 // git runs the checks that read the repository rather than the document.

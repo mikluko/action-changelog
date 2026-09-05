@@ -175,10 +175,14 @@ func state(path string, admit git.Eligible) repoState {
 		if shallow {
 			return repoState{Check: &changelog.Git{Err: errors.New("the checkout is shallow and reaches no version tag")}}
 		}
-		return repoState{Check: &changelog.Git{}, Tags: tags}
+		return repoState{Check: &changelog.Git{Tags: tagNames(tags)}, Tags: tags}
 	}
 
-	out := repoState{Check: &changelog.Git{ReferenceTag: reference.Name}, Tags: tags, Reference: reference.Name}
+	out := repoState{
+		Check:     &changelog.Git{ReferenceTag: reference.Name, Tags: tagNames(tags)},
+		Tags:      tags,
+		Reference: reference.Name,
+	}
 	rel, err := repoRelative(repo.Root(), path)
 	if err != nil {
 		return out
@@ -222,6 +226,16 @@ func outputs(doc *changelog.Changelog, tags []git.Tag, reference string, finding
 		// since released, which never stop being pre-releases.
 		{Name: "prerelease", Value: strconv.FormatBool(prerelease)},
 	}
+}
+
+// tagNames is every tag as the repository spells it, which is what
+// undated-release compares a newest entry naming no date against.
+func tagNames(tags []git.Tag) []string {
+	out := make([]string, 0, len(tags))
+	for _, t := range tags {
+		out = append(out, t.Name)
+	}
+	return out
 }
 
 // tagged reports whether the repository carries a tag naming version, which is

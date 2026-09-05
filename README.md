@@ -51,11 +51,17 @@ ignored. `fail-on: never` reports every finding and exits 0.
 
 ## The reference tag
 
-Everything that reads the repository reads one tag: the newest version tag
-**reachable from HEAD**, which is what `git describe --tags` names.
-`version-behind-tag` compares against it, `release-entry-modified` and
-`prerelease-entry-modified` take the changelog as it stood there as their
-baseline, and `latest-tag` reports it.
+Everything that compares the changelog against the repository's history reads
+one tag: the newest version tag **reachable from HEAD**, which is what
+`git describe --tags` names. `version-behind-tag` compares against it,
+`release-entry-modified` and `prerelease-entry-modified` take the changelog as
+it stood there as their baseline, and `latest-tag` reports it.
+
+`undated-release` is the one exception. It asks whether any tag names the newest
+entry's version, reachable or not, because a release is tagged whether or not
+the tag naming it is reachable from here. That is the set `already-tagged` is
+answered from, so the check and that output cannot disagree about which case a
+run is in.
 
 Reachability takes no setting, because a tag on a branch this checkout is not on
 is never the right baseline. It is what makes a maintained support line work: on
@@ -127,7 +133,7 @@ annotation, and which is what `error`, `warn` and `off` take.
 
 | Check | Default | Description |
 |---|---|---|
-| `heading-form` | `error` | An entry heading states a version and a date, as in [1.2.3] - 2006-01-02. The newest entry may omit the date, which undated-entry answers for. |
+| `heading-form` | `error` | An entry heading states a version and a date, as in [1.2.3] - 2006-01-02. The newest entry may omit the date, which undated-entry and undated-release answer for. |
 | `date-format` | `error` | An entry's date is written YYYY-MM-DD. |
 | `version-order` | `error` | Entries run newest first, each version strictly below the one above it. |
 | `empty-entry` | `error` | A released entry carries something under it. |
@@ -136,8 +142,9 @@ annotation, and which is what `error`, `warn` and `off` take.
 | `date-future` | `error` | No entry is dated later than today. |
 | `partial-link-refs` | `error` | Every versioned entry has a link reference definition, once any entry does. |
 | `prerelease-entry` | `off` | Policy: no entry names a pre-release version. Off by default; pre-release headings are legal. |
-| `undated-entry` | `error` | Policy: the newest entry states a date as well as a version. Switched off, that entry may name a version with no date; every entry below it still needs both. |
-| `no-git-tags` | `error` | The repository's tag history can be read, which every check below needs. |
+| `undated-entry` | `error` | Policy: the newest entry states a date, where no tag yet names its version. Switched off, that entry is open: a release still accumulating on a branch of its own. |
+| `undated-release` | `error` | The newest entry states a date, where a tag already names its version. The release shipped and nobody dated it. |
+| `no-git-tags` | `error` | The repository's tag history can be read, which every check comparing against it needs. |
 | `version-behind-tag` | `error` | The newest entry is not behind the reference tag. |
 | `release-entry-modified` | `error` | A released entry is unchanged since the reference tag. |
 | `prerelease-entry-modified` | `error` | A released pre-release entry is unchanged since the reference tag. |

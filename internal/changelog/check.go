@@ -56,7 +56,8 @@ const (
 	CheckPrereleaseEntry = "prerelease-entry"
 	CheckUndatedEntry    = "undated-entry"
 
-	// These four read the repository rather than the document alone.
+	// These five read the repository rather than the document alone.
+	CheckUndatedRelease          = "undated-release"
 	CheckNoGitTags               = "no-git-tags"
 	CheckVersionBehindTag        = "version-behind-tag"
 	CheckReleaseEntryModified    = "release-entry-modified"
@@ -87,7 +88,7 @@ type Check struct {
 var Checks = []Check{
 	{
 		Name:        CheckHeadingForm,
-		Description: "An entry heading states a version and a date, as in [1.2.3] - 2006-01-02. The newest entry may omit the date, which undated-entry answers for.",
+		Description: "An entry heading states a version and a date, as in [1.2.3] - 2006-01-02. The newest entry may omit the date, which undated-entry and undated-release answer for.",
 		Default:     Error,
 	},
 	{
@@ -132,12 +133,17 @@ var Checks = []Check{
 	},
 	{
 		Name:        CheckUndatedEntry,
-		Description: "Policy: the newest entry states a date as well as a version. Switched off, that entry may name a version with no date; every entry below it still needs both.",
+		Description: "Policy: the newest entry states a date, where no tag yet names its version. Switched off, that entry is open: a release still accumulating on a branch of its own.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckUndatedRelease,
+		Description: "The newest entry states a date, where a tag already names its version. The release shipped and nobody dated it.",
 		Default:     Error,
 	},
 	{
 		Name:        CheckNoGitTags,
-		Description: "The repository's tag history can be read, which every check below needs.",
+		Description: "The repository's tag history can be read, which every check comparing against it needs.",
 		Default:     Error,
 	},
 	{

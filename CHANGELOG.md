@@ -11,19 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`undated-entry`, which fires where the newest entry names a version and
-  carries no date.** It defaults to `error`, inverting the rule that a policy
-  check is off by default: an entry with no date is illegal under Keep a
-  Changelog, so the majority case is that it should fire. A release opened on a
-  branch of its own names its version before its date is known, and switches the
-  check off in `off:` for that branch's invocation, the way a trunk invocation
-  switches `prerelease-entry` on. Fourteen checks.
+- **`undated-entry` and `undated-release`, a pair the repository's tags decide
+  between** where the newest entry names a version and carries no date. No tag
+  names that version yet, and the entry is open: a release still accumulating on
+  a branch of its own, which names its version before its date is known.
+  `undated-entry` reports it, defaulting to `error` because an entry with no
+  date is illegal under Keep a Changelog, and **a branch accumulating a release
+  is the one invocation that switches it off** in `off:`, the way a trunk
+  invocation switches `prerelease-entry` on. A tag already names that version,
+  and the release shipped and nobody dated it: `undated-release` reports that,
+  also at `error`, and switching the other check off does not silence it.
+  Fifteen checks.
+- The two are separate because one setting cannot serve both. A stabilization
+  branch has to admit its open entry on every run, and a release that reached a
+  tag with no date is a defect on exactly that workflow, so a single check would
+  be switched off for the whole of the window in which the defect occurs. The
+  same tag question answers both, and it is the one `already-tagged` reports, so
+  the check and the output cannot disagree about which case a run is in.
+- Where the tag history cannot be read, the answer is unknowable and the entry
+  is reported as open. `no-git-tags` already names that cause, and accusing a
+  repository of shipping an undated release on the strength of tags nobody could
+  read is the more expensive of the two mistakes.
 
 ### Changed
 
 - `heading-form` accepts `## [1.2.3]` with no date on the newest versioned entry
-  only, which is the entry `undated-entry` then answers for. Every entry below
-  it has shipped and carries a date, so one missing there still fires
+  only, which is the entry the two checks above then answer for. Every entry
+  below it has shipped and carries a date, so one missing there still fires
   `heading-form`.
 
 ## [1.0.2] - 2026-09-04

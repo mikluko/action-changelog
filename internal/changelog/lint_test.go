@@ -224,8 +224,12 @@ func TestLintVocabularyIsConfigurable(t *testing.T) {
 // for that entry where heading-form answers for every other, and switching it
 // off is the whole of what such a branch's invocation carries.
 //
-// With it off the open entry passes everything: no date to format, none to
-// order against the entry below it, none to be in the future, and the link
+// No repository is offered here, so the entry is read as open rather than as a
+// release nobody dated; which of the two an offered repository decides is
+// TestGitChecks.
+//
+// With the check off the open entry passes everything: no date to format, none
+// to order against the entry below it, none to be in the future, and the link
 // reference definition it already carries in released form.
 func TestLintUndatedEntryOpensTheNewestEntry(t *testing.T) {
 	lines := []string{
