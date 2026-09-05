@@ -110,9 +110,9 @@ jobs:
           #
           # The grep drops anything whose ordinal is not a bare integer. A
           # repository that once numbered its pre-releases in two segments
-          # carries tags like v1.3.0-pre.350.1148, which the glob matches and
+          # carries tags like v1.3.0-pre.12.480, which the glob matches and
           # sort -n ranks above every single-segment ordinal, so without the
-          # filter the sequence resumes at 351.
+          # filter the sequence resumes inside a retired scheme's numbering.
           prev=$(git tag --list "v$VERSION-$STAGE.*" \
                  | sed "s|^v$VERSION-$STAGE\.||" \
                  | grep -E '^[0-9]+$' | sort -n | tail -1)

@@ -90,9 +90,10 @@ nothing, because `fetch-depth: 0` is already required for the tag-dependent
 checks and so the tags are in the checkout.
 
 **The `grep -E '^[0-9]+$'` is load-bearing.** A repository that once numbered its
-pre-releases in two segments carries tags like `v1.3.0-pre.350.1148`. The glob
-matches them and `sort -n` ranks that line above every single-segment ordinal, so
-without the filter the next tag is `v1.3.0-pre.351`.
+pre-releases in two segments carries tags like `v1.3.0-pre.12.480`. The glob
+matches them and `sort -n` ranks that line above the single-segment `6`, so
+without the filter the next tag is `v1.3.0-pre.13` and the sequence has jumped
+into a retired scheme's numbering.
 
 Four conditions stop the step before it cuts anything, and each says why in the
 run summary:
