@@ -89,8 +89,8 @@ than to fetch anything.
 | Output | Example | Description |
 |---|---|---|
 | `valid` | `true` | Whether the document conforms: `true` when nothing was found at error severity. Reported whatever `fail-on` is set to. |
-| `version` | `1.2.3` | The version the newest versioned entry names. |
-| `notes` | | The body of the newest versioned entry, verbatim. |
+| `version` | `1.2.3` | The version the newest entry names. |
+| `notes` | | The body of the newest entry, verbatim. |
 | `already-tagged` | `false` | Whether a tag naming `version` already exists. |
 | `prerelease` | `false` | Whether `version` carries a pre-release part, as in `1.2.3-rc1`. |
 | `latest-tag` | `v1.2.2` | The reference tag, as the repository spells it. |
@@ -119,7 +119,10 @@ the reference alone, so a release cut as a pre-release still reports `true` for
 the entry naming it.
 
 A document naming no version is still validated: `valid` and `already-tagged`
-answer, and `version` and `notes` are empty.
+answer, and `version` and `notes` are empty. A document whose newest entry
+carries a heading naming no version that can be read answers the same way, and
+`unreadable-version` reports that heading: nothing under it is the newest entry,
+so no output describes the entry below it.
 
 The values are written to `$GITHUB_OUTPUT` and printed on stdout, which is where
 a local run reads them.
@@ -133,7 +136,8 @@ annotation, and which is what `error`, `warn` and `off` take.
 
 | Check | Default | Description |
 |---|---|---|
-| `heading-form` | `error` | An entry heading states a version and a date, as in [1.2.3] - 2006-01-02. The newest entry may omit the date, which undated-entry and undated-release answer for. |
+| `unreadable-version` | `error` | An entry heading is [Unreleased] or names a version that can be read, as in [1.2.3]. Where the newest one names none, nothing is the newest entry and version and notes report nothing. |
+| `heading-form` | `error` | An entry heading states a date beside its version, as in [1.2.3] - 2006-01-02. The newest entry may omit the date, which undated-entry and undated-release answer for. |
 | `date-format` | `error` | An entry's date is written YYYY-MM-DD. |
 | `version-order` | `error` | Entries run newest first, each version strictly below the one above it. |
 | `empty-entry` | `error` | A released entry carries something under it. |

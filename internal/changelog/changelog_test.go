@@ -178,6 +178,27 @@ func TestParseMatchesLinkReferenceDefinitionsToEntries(t *testing.T) {
 	}
 }
 
+// The newest entry is the first one that is not Unreleased, whether or not its
+// heading names a version anything can read. Reading past an unreadable heading
+// makes the entry below it the newest, which is a release the document does not
+// name being handed to whatever consumes Latest.
+func TestLatestStopsAtAnUnreadableHeading(t *testing.T) {
+	src := []byte(strings.Join([]string{
+		"# Changelog", "",
+		"## [Unreleased]", "",
+		"## [9.9]", "", "### Added", "", "- a thing", "",
+		"## [9.8.0] - 2026-01-01", "", "### Fixed", "", "- a bug",
+	}, "\n"))
+
+	if e, ok := Parse(src).Latest(); ok {
+		t.Errorf("Latest() = (%q, true), want no entry", e.Version)
+	}
+	// The entry is still an entry, and the immutability checks still compare it.
+	if n := len(Parse(src).Released()); n != 1 {
+		t.Errorf("Released() = %d, want 1", n)
+	}
+}
+
 func equal(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
