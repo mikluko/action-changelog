@@ -5,7 +5,7 @@ reports where it departs from the format. Each finding is emitted as a workflow
 annotation, so a failing check lands on the offending line of the diff.
 
 ```yaml
-- uses: mikluko/action-changelog@v0
+- uses: mikluko/action-changelog@v1
   with:
     changelog: CHANGELOG.md
 ```

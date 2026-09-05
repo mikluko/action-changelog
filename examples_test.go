@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -162,7 +163,7 @@ func exampleInputs(t *testing.T, workflow string) map[string]string {
 	}
 	for _, job := range parsed.Jobs {
 		for _, step := range job.Steps {
-			if step.Uses == "mikluko/action-changelog@v0" {
+			if strings.HasPrefix(step.Uses, action) {
 				return step.With
 			}
 		}
