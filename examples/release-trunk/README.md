@@ -73,12 +73,12 @@ example is executed rather than described.
 
 ## What the tests here do not cover
 
-The four tag-dependent checks compare a document against the tags of the
-repository it lives in, and these documents live in this one, whose tags
+The five checks that read the repository compare a document against the tags of
+the repository it lives in, and these documents live in this one, whose tags
 describe the action rather than the project the example is written for. They
 run in a consuming repository and not here.
 
-One of them interacts with the last policy bullet. `version-behind-tag`
+One of the five interacts with the last policy bullet. `version-behind-tag`
 compares the newest entry against the newest version tag, and a pre-release tag
 sorts above the release below it, so a repository whose tags carry pre-releases
 while its changelog does not will find the newest entry reported as behind the

@@ -1,0 +1,64 @@
+name: Changelog
+
+# The stabilization-branch invocation. The release is open here: its entry names
+# a version and carries no date, because the release date is not known while the
+# branch is still accumulating. undated-entry is the check that says an undated
+# newest entry is a defect, and switching it off on this branch and nowhere else
+# is most of what the strategy costs in configuration.
+on:
+  push:
+    branches: ['release/*']
+
+# The action reports and writes nothing, so it needs no token beyond the one
+# the checkout uses. Whatever cuts the tag composed below needs more.
+permissions:
+  contents: read
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The tag-dependent checks read the repository's tags, and a default
+          # checkout carries none: no-git-tags fires and names this line.
+          fetch-depth: 0
+      - uses: mikluko/action-changelog@v0
+        id: changelog
+        with:
+          sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
+          # Quoted because YAML 1.1 reads a bare off as false, and the input has
+          # to survive whichever parser reads this file.
+          #
+          # undated-release is deliberately not beside it. That one fires where
+          # the newest entry carries no date and a tag already names its version,
+          # which is a release that shipped and nobody dated, and this branch
+          # wants it as much as the trunk does.
+          "off": undated-entry
+          # The default, written down because this is the branch where raising it
+          # to all looks right and is not: the reference would become a pre tag
+          # cut on this branch, whose changelog already carries the open entry,
+          # so release-entry-modified would fire on every commit that rewrote it.
+          reference-tags: final
+
+      # The action proposes no tag spelling, so the workflow composes one out of
+      # what it already knows: the version from the entry, the suffix from the
+      # branch it is running on, and the ordinal from its own run number.
+      # Whatever cuts tags in this repository reads this value.
+      #
+      # already-tagged is false for the whole life of the branch, because the
+      # tags cut here name 1.3.0-pre.N and the entry names 1.3.0. It turns true
+      # once the final tag exists, which is how this step knows to stop.
+      #
+      # The version reaches the script through the environment and never through
+      # ${{ }} expansion: it comes from a file a contributor wrote.
+      - name: The pre-release this run publishes
+        id: pre
+        if: steps.changelog.outputs.already-tagged == 'false'
+        env:
+          VERSION: ${{ steps.changelog.outputs.version }}
+        run: |
+          suffix="${GITHUB_REF_NAME##*-}"
+          tag="v$VERSION-$suffix.$GITHUB_RUN_NUMBER"
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "This run publishes **$tag**." >>"$GITHUB_STEP_SUMMARY"

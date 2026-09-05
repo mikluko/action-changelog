@@ -1,0 +1,29 @@
+name: Changelog
+
+# The trunk invocation. The stabilization branch merges here, and that merge is
+# what dates the entry, so undated-entry is left at its default, which is error:
+# an entry that reaches the trunk still open fails.
+#
+# prerelease-entry is raised because under this strategy the X.Y.Z-pre.N spelling
+# is a tag the branch workflow composes and never a heading in the file, so a
+# pre-release entry anywhere in the document is a mistake.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The tag-dependent checks read the repository's tags, and a default
+          # checkout carries none: no-git-tags fires and names this line.
+          fetch-depth: 0
+      - uses: mikluko/action-changelog@v0
+        with:
+          sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
+          error: prerelease-entry

@@ -151,12 +151,24 @@ annotation, and which is what `error`, `warn` and `off` take.
 
 <!-- checks:end -->
 
-## A worked policy
+## Two worked policies
 
-[`examples/`](examples/) carries one complete policy: a changelog written to
-it, the two workflow invocations that enforce it, and a deliberately broken
-copy. `go test ./...` validates all of it under the inputs those workflows
-carry, so the example is executed rather than described.
+[`examples/`](examples/) carries two named release strategies, each as a
+complete worked example: a changelog written to it, the workflow invocations
+that enforce it, and a deliberately broken copy.
+
+[`release-trunk/`](examples/release-trunk/) releases on the trunk. The newest
+entry names a version and a date, a push to the trunk finds that version
+untagged, and the tag is cut. One branch, one ceremony.
+
+[`release-branch/`](examples/release-branch/) opens a release on a branch of its
+own. The entry names a version and carries no date while the branch accumulates,
+`undated-entry` is switched off there and nowhere else, every run on the branch
+publishes under a pre-release tag the workflow composes from `version` and its
+own run number, and merging to the trunk dates the entry and cuts the final tag.
+
+`go test ./...` validates both trees under the inputs their workflows carry, so
+the examples are executed rather than described.
 
 ## Local use
 
