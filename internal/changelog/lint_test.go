@@ -51,8 +51,12 @@ func TestLintFindings(t *testing.T) {
 			"neither [Unreleased] nor a version",
 		},
 		{
-			"version without a date",
-			[]string{"# Changelog", "", "## [1.0.0]", "", "- a thing"},
+			"a version below the newest without a date",
+			[]string{
+				"# Changelog", "",
+				"## [1.1.0] - 2026-09-04", "", "- a thing", "",
+				"## [1.0.0]", "", "- another",
+			},
 			CheckHeadingForm,
 			"carries no date",
 		},
@@ -212,5 +216,48 @@ func TestLintVocabularyIsConfigurable(t *testing.T) {
 	extended := append(append([]string{}, DefaultSections...), "Breaking")
 	if got := lint(t, extended, lines...); len(got) != 0 {
 		t.Errorf("Breaking rejected after being allowed: %v", got)
+	}
+}
+
+// A release opened on a branch of its own names its version before its date is
+// known, so the newest entry may carry a version alone. undated-entry answers
+// for that entry where heading-form answers for every other, and switching it
+// off is the whole of what such a branch's invocation carries.
+//
+// No repository is offered here, so the entry is read as open rather than as a
+// release nobody dated; which of the two an offered repository decides is
+// TestGitChecks.
+//
+// With the check off the open entry passes everything: no date to format, none
+// to order against the entry below it, none to be in the future, and the link
+// reference definition it already carries in released form.
+func TestLintUndatedEntryOpensTheNewestEntry(t *testing.T) {
+	lines := []string{
+		"# Changelog", "",
+		"## [Unreleased]", "",
+		"## [1.1.0]", "", "### Added", "", "- a thing", "",
+		"## [1.0.0] - 2026-08-01", "", "### Fixed", "", "- a bug", "",
+		"[1.1.0]: https://example.test/compare/v1.0.0...v1.1.0",
+		"[1.0.0]: https://example.test/releases/tag/v1.0.0",
+	}
+
+	got := lint(t, nil, lines...)
+	if len(got) != 1 {
+		t.Fatalf("findings %v by default, want exactly the undated-entry one", got)
+	}
+	if got[0].Check != CheckUndatedEntry || got[0].Severity != Error {
+		t.Errorf("finding %v raised by %q at %s, want %s at error",
+			got[0], got[0].Check, got[0].Severity, CheckUndatedEntry)
+	}
+	if !strings.Contains(got[0].Msg, "1.1.0") {
+		t.Errorf("finding %v does not name the entry it is about", got[0])
+	}
+
+	severities := DefaultSeverities()
+	if err := severities.Set(CheckUndatedEntry, Off); err != nil {
+		t.Fatal(err)
+	}
+	if got := Parse([]byte(strings.Join(lines, "\n"))).Lint(Options{Severities: severities}); len(got) != 0 {
+		t.Fatalf("findings on an open entry with undated-entry off: %v", got)
 	}
 }

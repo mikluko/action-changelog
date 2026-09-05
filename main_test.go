@@ -169,6 +169,46 @@ func TestRewritingAReleasedEntryTurnsTheBuildRed(t *testing.T) {
 	}
 }
 
+// Which of the two undated checks fires is answered from the repository's own
+// tags, so the wiring from the checkout through to the check is what this holds
+// rather than a stub: one entry, unchanged, is a release still being written
+// before the tag exists and a release nobody dated after it.
+func TestAnUndatedEntryIsReadAgainstTheRepositorysTags(t *testing.T) {
+	const doc = "# Changelog\n\n## [1.1.0]\n\n### Added\n\n- a thing\n\n" +
+		"## [1.0.0] - 2026-01-01\n\n### Added\n\n- the first thing\n"
+
+	dir := fixture(t)
+	path := filepath.Join(dir, "CHANGELOG.md")
+	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitcmd(t, dir, "add", "CHANGELOG.md")
+	gitcmd(t, dir, "commit", "-m", "1.0.0")
+	gitcmd(t, dir, "tag", "v1.0.0")
+
+	fired := func() string {
+		t.Helper()
+		var log bytes.Buffer
+		_, findings, err := run(path, changelog.Options{Git: state(path, git.Final).Check}, &log, &log)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(findings) != 1 {
+			t.Fatalf("findings %v, want exactly one; log: %s", findings, log.String())
+		}
+		return findings[0].Check
+	}
+
+	if got := fired(); got != changelog.CheckUndatedEntry {
+		t.Errorf("%s fired while 1.1.0 was untagged, want %s", got, changelog.CheckUndatedEntry)
+	}
+
+	gitcmd(t, dir, "tag", "v1.1.0")
+	if got := fired(); got != changelog.CheckUndatedRelease {
+		t.Errorf("%s fired once v1.1.0 was cut, want %s", got, changelog.CheckUndatedRelease)
+	}
+}
+
 // A release candidate cut above the newest entry is the case -reference-tags
 // exists for: under the default it is not a baseline, so a conforming changelog
 // is not reported as behind it, and a repository that does want it says so.
@@ -346,6 +386,28 @@ func TestOutputsOfADocumentNamingNoVersion(t *testing.T) {
 	}
 	if got["valid"] != "true" || got["already-tagged"] != "false" {
 		t.Errorf("valid is %q and already-tagged %q", got["valid"], got["already-tagged"])
+	}
+}
+
+// An entry naming a version and no date is the release a branch is still
+// accumulating, and the outputs answer for it: the version is the heading's and
+// the notes are the body's, neither of which is a date. It is invalid under the
+// defaults, which is what undated-entry being off on that branch settles.
+func TestOutputsDescribeAnUndatedNewestEntry(t *testing.T) {
+	path := write(t, "# Changelog\n\n## [1.1.0]\n\n### Added\n\n- a thing\n\n"+
+		"## [1.0.0] - 2026-01-01\n\n### Added\n\n- the first thing\n")
+
+	got := emitted(t, path, repoState{})
+	want := map[string]string{
+		"valid":      "false",
+		"version":    "1.1.0",
+		"notes":      "### Added\n\n- a thing",
+		"prerelease": "false",
+	}
+	for name, value := range want {
+		if got[name] != value {
+			t.Errorf("%s is %q, want %q", name, got[name], value)
+		}
 	}
 }
 

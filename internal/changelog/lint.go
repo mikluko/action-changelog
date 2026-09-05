@@ -70,6 +70,14 @@ func (c *Changelog) Lint(opts Options) []Finding {
 
 	linked := anyLinkRef(c.Entries)
 	asOf := today()
+	// An entry with no date is one of two things and the tags tell them apart:
+	// a release still being written, or a release that shipped and nobody
+	// dated. tag answers "" where they could not be read, so the case nothing
+	// can decide is reported as the first.
+	newestLine, newestTag := -1, ""
+	if latest, ok := c.Latest(); ok {
+		newestLine, newestTag = latest.Line, opts.Git.tag(latest.Version)
+	}
 
 	var prev Entry
 	for _, e := range c.Entries {
@@ -79,10 +87,19 @@ func (c *Changelog) Lint(opts Options) []Finding {
 			f.add(CheckHeadingForm, e.Line,
 				"heading %q is neither [Unreleased] nor a version and date, as in [1.2.3] - 2006-01-02", e.Raw)
 		default:
-			if e.Date == "" {
+			switch {
+			case e.Date == "" && e.Line == newestLine && newestTag != "":
+				f.add(CheckUndatedRelease, e.Line,
+					"version %s carries no date and tag %s already names it; the release shipped, so write its date as [%s] - 2006-01-02",
+					e.Version[1:], newestTag, e.Version[1:])
+			case e.Date == "" && e.Line == newestLine:
+				f.add(CheckUndatedEntry, e.Line,
+					"version %s carries no date; write it as [%s] - 2006-01-02, or switch this check off while the release is still accumulating on a branch of its own",
+					e.Version[1:], e.Version[1:])
+			case e.Date == "":
 				f.add(CheckHeadingForm, e.Line,
 					"version %s carries no date; write it as [%s] - 2006-01-02", e.Version[1:], e.Version[1:])
-			} else if !isDate(e.Date) {
+			case !isDate(e.Date):
 				f.add(CheckDateFormat, e.Line, "date %q is not YYYY-MM-DD", e.Date)
 			}
 			if prev.Version != "" && semver.Compare(e.Version, prev.Version) >= 0 {

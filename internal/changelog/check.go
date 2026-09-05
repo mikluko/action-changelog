@@ -54,8 +54,10 @@ const (
 	CheckDateFuture      = "date-future"
 	CheckPartialLinkRef  = "partial-link-refs"
 	CheckPrereleaseEntry = "prerelease-entry"
+	CheckUndatedEntry    = "undated-entry"
 
-	// These four read the repository rather than the document alone.
+	// These five read the repository rather than the document alone.
+	CheckUndatedRelease          = "undated-release"
 	CheckNoGitTags               = "no-git-tags"
 	CheckVersionBehindTag        = "version-behind-tag"
 	CheckReleaseEntryModified    = "release-entry-modified"
@@ -79,11 +81,14 @@ type Check struct {
 //
 // A check that catches a defect defaults to Error; a check that encodes a
 // policy defaults to Off, because a policy check's absence is the majority case
-// being correct.
+// being correct. undated-entry inverts the second half: it encodes a policy and
+// defaults to Error, because an entry with no date is illegal under Keep a
+// Changelog, and a release still accumulating on a branch of its own is the one
+// case that wants it.
 var Checks = []Check{
 	{
 		Name:        CheckHeadingForm,
-		Description: "An entry heading states a version and a date, as in [1.2.3] - 2006-01-02.",
+		Description: "An entry heading states a version and a date, as in [1.2.3] - 2006-01-02. The newest entry may omit the date, which undated-entry and undated-release answer for.",
 		Default:     Error,
 	},
 	{
@@ -127,8 +132,18 @@ var Checks = []Check{
 		Default:     Off,
 	},
 	{
+		Name:        CheckUndatedEntry,
+		Description: "Policy: the newest entry states a date, where no tag yet names its version. Switched off, that entry is open: a release still accumulating on a branch of its own.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckUndatedRelease,
+		Description: "The newest entry states a date, where a tag already names its version. The release shipped and nobody dated it.",
+		Default:     Error,
+	},
+	{
 		Name:        CheckNoGitTags,
-		Description: "The repository's tag history can be read, which every check below needs.",
+		Description: "The repository's tag history can be read, which every check comparing against it needs.",
 		Default:     Error,
 	},
 	{
