@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-05
+
 ### Added
 
 - **`unreadable-version`, a check of its own for an entry heading naming no
@@ -141,7 +143,8 @@ recorded separately: nothing consumed them but this repository.
   candidate can be pulled and tested before it merges, and one reaching `main`
   is refused rather than published.
 
-[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/mikluko/action-changelog/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mikluko/action-changelog/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/mikluko/action-changelog/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/mikluko/action-changelog/compare/v1.0.0...v1.0.1
