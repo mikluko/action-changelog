@@ -3,9 +3,9 @@ name: Changelog
 # The trunk invocation. The stabilization branch merges here, and that merge is
 # what dates the entry, so undated-entry is left at its default, which is error:
 # an entry that reaches the trunk still open fails. That is the one input this
-# file does not share with the other two.
+# file does not share with the other three.
 #
-# prerelease-entry it does share: it is raised on all three invocations, because
+# prerelease-entry it does share: it is raised on all four invocations, because
 # under this strategy the X.Y.Z-pre.N spelling is a tag the branch workflow
 # composes and never a heading in the file, so a pre-release entry anywhere in
 # the document is a mistake and there is no branch where it is under discussion.

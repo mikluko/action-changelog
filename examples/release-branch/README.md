@@ -6,7 +6,7 @@ accumulating. Every run on that branch cuts a pre-release tag, `X.Y.Z-pre.N`,
 for whatever publishes downstream. Merging to the trunk dates the entry and cuts
 the final tag.
 
-A complete policy: a changelog written to it, and the three workflow invocations
+A complete policy: a changelog written to it, and the four workflow invocations
 that hold a repository to it. Everything here is generic. Copy the workflows
 into `.github/workflows/`, copy the changelog's shape, and adjust the vocabulary
 and the link references to the repository.
@@ -177,6 +177,34 @@ check them.** Sorting the tags a line would cut is the whole check. It is worth
 doing when a third stage is added, which is the one moment nobody is reading the
 workflow that already works.
 
+## The publish-time invocation
+
+The stabilization branch cuts `v1.3.0-pre.N`, and whatever builds and publishes a
+tag therefore runs on those tags as well as on the final one. If that workflow
+reads the changelog for its release notes, it meets the open entry too, and there
+the failure is worse than a red check: the **build** fails, on a document that is
+correct.
+
+So [`workflows/tag.yaml`](workflows/tag.yaml) carries the same relaxation the
+branch does. `undated-release` stays on, as it does everywhere, and this is the
+invocation where it earns its place most plainly: a tag already names the
+version, so an undated newest entry there is a release that shipped and nobody
+dated.
+
+The step that files the release is guarded on the entry naming this tag:
+
+```yaml
+- name: File the release
+  if: format('v{0}', steps.changelog.outputs.version) == github.ref_name
+```
+
+`1.3.0` never equals `1.3.0-pre.3`, so a pre-release tag files no release: it is
+a build of a version the changelog has not released yet, and the notes belong to
+the final tag. The same comparison refuses a tag pushed by hand at a commit the
+newest entry does not describe, which is a hazard on any repository that
+publishes from a changelog and has nothing to do with this strategy. **So a
+publish step already carrying that guard needs one input, not a redesign.**
+
 ## `reference-tags: final`, and why it is a requirement
 
 `reference-tags` decides which tags may be the reference tag the checks that read
@@ -191,31 +219,34 @@ then trips `release-entry-modified`, and the branch fails continuously in the
 confusing direction: an immutability check complaining about an entry that has
 never been released.
 
-`final` is the default, so the other two invocations rely on it without saying
+`final` is the default, so the other three invocations rely on it without saying
 so. It is written down on the branch invocation for the reason above and nowhere
 else.
 
 ## What it costs in configuration
 
-Four inputs across three files. `sections` and `error` are the same in all of
+Four inputs across four files. `sections` and `error` are the same in all of
 them; `off` and `reference-tags` are what separate them, and the trunk invocation
 is the only one carrying neither.
 
 | Workflow | Runs on | `sections` | `error` | `off` | `reference-tags` |
 |---|---|---|---|---|---|
 | [`release-branch.yaml`](workflows/release-branch.yaml) | a push to `release/*-pre` or `release/*-rc` | the six plus `Breaking` | `prerelease-entry` | `undated-entry` | `final` |
+| [`tag.yaml`](workflows/tag.yaml) | a push of a version tag | the six plus `Breaking` | `prerelease-entry` | `undated-entry` | *(default)* |
 | [`main.yaml`](workflows/main.yaml) | a push to `main` | the six plus `Breaking` | `prerelease-entry` | *(unset)* | *(default)* |
 | [`pull-request.yaml`](workflows/pull-request.yaml) | a pull request | the six plus `Breaking` | `prerelease-entry` | `undated-entry` | *(default)* |
 
-`off` is quoted in both files that carry it, because YAML 1.1 reads a bare
+`off` is quoted in all three files that carry it, because YAML 1.1 reads a bare
 `off` as `false` and the input name has to survive whichever parser reads the
 file.
 
-The two files that relax `undated-entry` do it for different reasons. The branch
-is where the entry is open. The pull-request invocation relaxes it because a pull
-request may target the stabilization branch, where the newest entry is
-legitimately open, or the trunk, where it is not, and nothing in the binary knows
-which; the two push invocations decide once the commit has landed somewhere.
+The three files that relax `undated-entry` do it for three different reasons. The
+branch is where the entry is open. The publish invocation runs on the tags that
+branch cuts, so it meets the same entry one step downstream. The pull-request
+invocation relaxes it because a pull request may target the stabilization branch,
+where the newest entry is legitimately open, or the trunk, where it is not, and
+nothing in the binary knows which; the two push invocations decide once the
+commit has landed somewhere.
 
 A repository that would rather keep fewer files may fold the branch and
 pull-request invocations into a single workflow whose `on:` carries the push
@@ -228,7 +259,7 @@ reason is written down.
 
 [`CHANGELOG.md`](CHANGELOG.md) is the branch's own state: `[Unreleased]`
 permanent and empty, an open entry under it, and released entries below that. It
-passes under the branch and pull-request invocations. Under the trunk
+passes under the branch, publish and pull-request invocations. Under the trunk
 invocation it raises `undated-entry`, which is correct: that file never reaches
 the trunk in that state, because the merge dates the entry first.
 
@@ -241,11 +272,11 @@ one per check:
 | `1.2.0`, below the newest entry, also carries no date | `heading-form` |
 | `## [1.1.0-pre.3]`, a pre-release entry where this strategy keeps pre-releases in tags | `prerelease-entry` |
 
-All three invocations report all three, because all three raise `prerelease-entry`.
+All four invocations report all three, because all four raise `prerelease-entry`.
 The trunk invocation reports a fourth, `undated-entry` on the open entry, for the
 same reason it reports it on `CHANGELOG.md`.
 
-`go test ./...` runs both documents under the inputs all three workflows carry and
+`go test ./...` runs both documents under the inputs all four workflows carry and
 holds the broken one to exactly those lists. An example that rots is worse than
 none, so the example is executed rather than described.
 
@@ -256,8 +287,8 @@ the repository it lives in, and these documents live in this one, whose tags
 describe the action rather than the project the example is written for. They run
 in a consuming repository and not here.
 
-`undated-release` is one of those five, so the test holds the branch invocation
-to leaving it at `error` rather than watching it fire. That is the assertion the
-policy needs: what would break the
+`undated-release` is one of those five, so the test holds every invocation that
+switches `undated-entry` off to leaving `undated-release` at `error`, rather than
+watching it fire. That is the assertion the policy needs: what would break the
 strategy is naming it in `off:` beside `undated-entry`, and a workflow either
 names it there or does not.

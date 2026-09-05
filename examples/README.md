@@ -15,11 +15,11 @@ product.
 |---|---|---|
 | Where a release is prepared | on the trunk | on `release/vX.Y-pre` |
 | The newest entry | names a version and a date | names a version and no date while the branch is open |
-| What a run hands downstream | the release, once the trunk finds the version untagged | `vX.Y.Z-pre.N`, composed on every run on the branch |
-| Workflow invocations | two | three |
-| `undated-entry` | at its default, `error` | switched off on the stabilization branch, and nowhere else |
+| What a run hands downstream | the release, once the trunk finds the version untagged | `vX.Y.Z-pre.N`, cut on every run on the branch |
+| Workflow invocations | two | four |
+| `undated-entry` | at its default, `error` | switched off on three of the four invocations; the trunk is the one that keeps it |
 | `undated-release` | at its default, `error` | at its default, `error` |
-| `prerelease-entry` | raised on the trunk, left off on pull requests | raised on all three invocations |
+| `prerelease-entry` | raised on the trunk, left off on pull requests | raised on all four invocations |
 
 **release-trunk** is for a repository whose releases are decided in one commit:
 the entry is written with its date, it merges, and the tag is cut. One branch,
@@ -39,4 +39,5 @@ what separates the two:
 
 A repository on release-trunk that has never wanted a stabilization branch needs
 nothing from the other tree. Going the other way costs one branch, one workflow
-file, and one input.
+file, and one input wherever a workflow reads the changelog while the entry is
+open.

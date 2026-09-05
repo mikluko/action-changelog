@@ -33,6 +33,7 @@ const (
 	branchGood    = "examples/release-branch/CHANGELOG.md"
 	branchBroken  = "examples/release-branch/CHANGELOG.broken.md"
 	branchStable  = "examples/release-branch/workflows/release-branch.yaml"
+	branchTag     = "examples/release-branch/workflows/tag.yaml"
 	branchMain    = "examples/release-branch/workflows/main.yaml"
 	branchRequest = "examples/release-branch/workflows/pull-request.yaml"
 )
@@ -172,7 +173,7 @@ func exampleInputs(t *testing.T, workflow string) map[string]string {
 	return nil
 }
 
-// The release-branch strategy is three invocations whose differences are the
+// The release-branch strategy is four invocations whose differences are the
 // whole of it, and its README tabulates them. The literal here is that table:
 // an input added to a workflow or dropped from one fails this test rather than
 // leaving a README that has quietly stopped describing the tree.
@@ -186,6 +187,11 @@ func TestReleaseBranchWorkflowInputs(t *testing.T) {
 			"error":          changelog.CheckPrereleaseEntry,
 			"off":            changelog.CheckUndatedEntry,
 			"reference-tags": "final",
+		}},
+		{branchTag, map[string]string{
+			"sections": exampleSections,
+			"error":    changelog.CheckPrereleaseEntry,
+			"off":      changelog.CheckUndatedEntry,
 		}},
 		{branchMain, map[string]string{
 			"sections": exampleSections,
@@ -205,32 +211,40 @@ func TestReleaseBranchWorkflowInputs(t *testing.T) {
 	}
 }
 
-// undated-entry is the check the stabilization branch switches off; the strategy
-// breaks where undated-release goes off beside it. That one fires only where a
-// tag already names the undated entry's version, which is a release that shipped
-// and nobody dated, and no branch wants that. The two read alike in a workflow
-// and mean opposite things, so the branch invocation is held to the distinction.
+// undated-entry is the check this strategy switches off; the strategy breaks
+// where undated-release goes off beside it. That one fires only where a tag
+// already names the undated entry's version, which is a release that shipped and
+// nobody dated, and no invocation wants that. The two read alike in a workflow
+// and mean opposite things, so every invocation that relaxes the first is held
+// to keeping the second.
 func TestReleaseBranchKeepsUndatedReleaseOn(t *testing.T) {
-	with := exampleInputs(t, branchStable)
-	sev, err := severities(with["error"], with["warn"], with["off"])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := sev[changelog.CheckUndatedEntry]; got != changelog.Off {
-		t.Errorf("the branch invocation runs %s at %s, want off", changelog.CheckUndatedEntry, got)
-	}
-	if got := sev[changelog.CheckUndatedRelease]; got != changelog.Error {
-		t.Errorf("the branch invocation runs %s at %s, want error", changelog.CheckUndatedRelease, got)
+	for _, workflow := range []string{branchStable, branchTag, branchRequest} {
+		t.Run(filepath.Base(workflow), func(t *testing.T) {
+			with := exampleInputs(t, workflow)
+			sev, err := severities(with["error"], with["warn"], with["off"])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := sev[changelog.CheckUndatedEntry]; got != changelog.Off {
+				t.Errorf("%s runs %s at %s, want off", workflow, changelog.CheckUndatedEntry, got)
+			}
+			if got := sev[changelog.CheckUndatedRelease]; got != changelog.Error {
+				t.Errorf("%s runs %s at %s, want error", workflow, changelog.CheckUndatedRelease, got)
+			}
+		})
 	}
 }
 
-// One document under the three invocations is the whole strategy: the open entry
-// passes where the branch says it is open and is refused where the trunk says it
-// is not. The refusal is not a defect in the example. That file never reaches
-// the trunk in that state, because the merge dates the entry first.
+// One document under the four invocations is the whole strategy: the open entry
+// passes wherever the strategy says it is open, which is the branch, the tags
+// that branch cuts and a pull request that may target either, and is refused
+// where the trunk says it is not. The refusal is not a defect in the example.
+// That file never reaches the trunk in that state, because the merge dates the
+// entry first.
 func TestReleaseBranchOpenEntry(t *testing.T) {
 	forEachInvocation(t, branchGood, []exampleCase{
 		{branchStable, nil},
+		{branchTag, nil},
 		{branchRequest, nil},
 		{branchMain, []string{changelog.CheckUndatedEntry}},
 	})
@@ -242,6 +256,11 @@ func TestReleaseBranchOpenEntry(t *testing.T) {
 func TestReleaseBranchBrokenChangelogFailsWithTheFindingsItClaims(t *testing.T) {
 	forEachInvocation(t, branchBroken, []exampleCase{
 		{branchStable, []string{
+			changelog.CheckPartialLinkRef,
+			changelog.CheckHeadingForm,
+			changelog.CheckPrereleaseEntry,
+		}},
+		{branchTag, []string{
 			changelog.CheckPartialLinkRef,
 			changelog.CheckHeadingForm,
 			changelog.CheckPrereleaseEntry,

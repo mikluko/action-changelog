@@ -51,7 +51,7 @@ jobs:
         id: changelog
         with:
           sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
-          # Raised on all three invocations of this strategy. The candidate this
+          # Raised on all four invocations of this strategy. The candidate this
           # branch produces is the tag composed below and never a heading, so a
           # pre-release entry is a mistake wherever in the document it appears.
           error: prerelease-entry
