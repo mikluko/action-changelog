@@ -12,27 +12,27 @@ import (
 	"github.com/mikluko/action-changelog/internal/changelog"
 )
 
-// The example under ./examples is executed rather than described. Its two
-// workflows are read for the inputs they carry, those inputs are resolved
-// through the same flag handling the command uses, and both example documents
-// are validated under the result.
+// The examples under ./examples are executed rather than described. Each
+// strategy's workflows are read for the inputs they carry, those inputs are
+// resolved through the same flag handling the command uses, and that strategy's
+// two documents are validated under the result.
 //
 // The tag-dependent checks are left out, which is deliberate: they compare a
 // document against the tags of the repository it lives in, and these documents
 // live in this one, whose tags describe this action rather than the fictional
 // project the example is written for.
 const (
-	exampleGood     = "examples/CHANGELOG.md"
-	exampleBroken   = "examples/CHANGELOG.broken.md"
-	workflowMain    = "examples/workflows/main.yaml"
-	workflowRequest = "examples/workflows/pull-request.yaml"
+	trunkGood    = "examples/release-trunk/CHANGELOG.md"
+	trunkBroken  = "examples/release-trunk/CHANGELOG.broken.md"
+	trunkMain    = "examples/release-trunk/workflows/main.yaml"
+	trunkRequest = "examples/release-trunk/workflows/pull-request.yaml"
 )
 
 // The example claims a policy that costs one input on one of the two
 // invocations, so a reader can copy both and see where they part. A second
 // difference would make the claim false without any test noticing.
-func TestExampleWorkflowsDifferInOneInput(t *testing.T) {
-	on, off := exampleInputs(t, workflowMain), exampleInputs(t, workflowRequest)
+func TestReleaseTrunkWorkflowsDifferInOneInput(t *testing.T) {
+	on, off := exampleInputs(t, trunkMain), exampleInputs(t, trunkRequest)
 
 	if got := on["error"]; got != changelog.CheckPrereleaseEntry {
 		t.Errorf("the main-branch invocation raises %q, not %s", got, changelog.CheckPrereleaseEntry)
@@ -50,11 +50,11 @@ func TestExampleWorkflowsDifferInOneInput(t *testing.T) {
 // The example changelog passes under the example configuration. It is written
 // to a policy the default vocabulary refuses, so this also holds the sections
 // input to the document it is there for.
-func TestExampleChangelogPasses(t *testing.T) {
-	for _, workflow := range []string{workflowMain, workflowRequest} {
+func TestReleaseTrunkChangelogPasses(t *testing.T) {
+	for _, workflow := range []string{trunkMain, trunkRequest} {
 		t.Run(filepath.Base(workflow), func(t *testing.T) {
 			var log bytes.Buffer
-			findings := lintExample(t, exampleGood, workflow, &log)
+			findings := lintExample(t, trunkGood, workflow, &log)
 			if len(findings) != 0 {
 				t.Errorf("the example changelog does not pass its own configuration:\n%s", log.String())
 			}
@@ -66,13 +66,13 @@ func TestExampleChangelogPasses(t *testing.T) {
 // order the report prints them. Asserting the set rather than the count is what
 // keeps the README honest: a check that stopped firing would otherwise be
 // covered by one that started.
-func TestBrokenExampleFailsWithTheFindingsItClaims(t *testing.T) {
+func TestReleaseTrunkBrokenChangelogFailsWithTheFindingsItClaims(t *testing.T) {
 	for _, tc := range []struct {
 		workflow string
 		want     []string
 	}{
 		{
-			workflowMain,
+			trunkMain,
 			[]string{
 				changelog.CheckUnknownSection,
 				changelog.CheckPrereleaseEntry,
@@ -81,7 +81,7 @@ func TestBrokenExampleFailsWithTheFindingsItClaims(t *testing.T) {
 			},
 		},
 		{
-			workflowRequest,
+			trunkRequest,
 			[]string{
 				changelog.CheckUnknownSection,
 				changelog.CheckVersionOrder,
@@ -91,7 +91,7 @@ func TestBrokenExampleFailsWithTheFindingsItClaims(t *testing.T) {
 	} {
 		t.Run(filepath.Base(tc.workflow), func(t *testing.T) {
 			var log bytes.Buffer
-			findings := lintExample(t, exampleBroken, tc.workflow, &log)
+			findings := lintExample(t, trunkBroken, tc.workflow, &log)
 
 			var got []string
 			for _, f := range findings {

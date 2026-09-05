@@ -1,9 +1,17 @@
-# A worked policy
+# release-trunk
 
-One complete policy: a changelog written to it, and the two workflow
-invocations that hold a repository to it. Everything here is generic. Copy the
-workflows into `.github/workflows/`, copy the changelog's shape, and adjust the
+The release happens on the trunk. The newest entry names a version and a date,
+a push to the trunk finds that version untagged, and the tag is cut. One
+branch, one ceremony.
+
+A complete policy: a changelog written to it, and the two workflow invocations
+that hold a repository to it. Everything here is generic. Copy the workflows
+into `.github/workflows/`, copy the changelog's shape, and adjust the
 vocabulary and the link references to the repository.
+
+[`../release-branch/`](../release-branch/) is the other strategy, where a
+release opens on a branch of its own and its entry carries no date until that
+branch merges.
 
 ## The policy
 
@@ -37,6 +45,11 @@ how the two branches differ: a release pull request may legitimately carry such
 a heading while it is under discussion, and nothing in the binary knows what a
 pull request is. The two files are otherwise identical, and a test holds them
 to that.
+
+`undated-entry` and `undated-release` are both at their default, which is
+`error`, and between them they are what holds the newest entry to naming a
+date. The other strategy switches the first of them off on one branch;
+this one never switches either off anywhere.
 
 ## The two documents
 
