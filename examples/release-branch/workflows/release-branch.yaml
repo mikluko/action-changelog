@@ -3,16 +3,33 @@ name: Changelog
 # The stabilization-branch invocation. The release is open here: its entry names
 # a version and carries no date, because the release date is not known while the
 # branch is still accumulating. undated-entry is the check that says an undated
-# newest entry is a defect, and switching it off on this branch and nowhere else
-# is most of what the strategy costs in configuration.
+# newest entry is a defect, and switching it off on this branch is most of what
+# the strategy costs in configuration.
+#
+# One file serves every stage, because the stage is derived from the branch the
+# run is on. Adding a third stage is one more pattern in the trigger below.
 on:
   push:
-    branches: ['release/*']
+    # The list of stages lives here, and this is what makes the derivation in
+    # the cutting step safe. A branch filter's * does not span /, so these two
+    # patterns match release/v1.3-pre and release/v1.3-rc and nothing else, and
+    # the workflow cannot run on a branch that names no stage.
+    #
+    # Do not simplify this to 'release/*'. The derivation returns the whole ref
+    # for a branch carrying no hyphen, so release/v1.3 would compose a tag with
+    # a slash in it and main would compose v1.3.0-main.7, which is a legal tag
+    # and nonsense. Under the patterns below neither branch starts a run at all.
+    branches: ['release/*-pre', 'release/*-rc']
 
-# The action reports and writes nothing, so it needs no token beyond the one
-# the checkout uses. Whatever cuts the tag composed below needs more.
+# Queued rather than cancelled. This workflow cuts a tag and pushes it, and a
+# run killed between the two leaves a tag behind that nothing published.
+concurrency:
+  group: ${{ github.ref }}/${{ github.workflow }}
+  cancel-in-progress: false
+
+# The action reports and writes nothing; the step below pushes a tag.
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   changelog:
@@ -21,13 +38,20 @@ jobs:
       - uses: actions/checkout@v5
         with:
           # The tag-dependent checks read the repository's tags, and a default
-          # checkout carries none: no-git-tags fires and names this line.
+          # checkout carries none: no-git-tags fires and names this line. The
+          # ordinal below reads the same history, so it costs nothing extra.
           fetch-depth: 0
+          # A tag pushed with the default GITHUB_TOKEN triggers no workflow, so
+          # tag.yaml would never run on what this branch cuts and the release
+          # would never be built. The push below inherits whatever token the
+          # checkout used, which is why it is set here; supply a token of your
+          # own under whatever name your repository keeps it.
+          token: ${{ secrets.RELEASE_TOKEN }}
       - uses: mikluko/action-changelog@v1
         id: changelog
         with:
           sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
-          # Raised on all three invocations of this strategy. The candidate this
+          # Raised on all four invocations of this strategy. The candidate this
           # branch produces is the tag composed below and never a heading, so a
           # pre-release entry is a mistake wherever in the document it appears.
           error: prerelease-entry
@@ -45,23 +69,59 @@ jobs:
           # so release-entry-modified would fire on every commit that rewrote it.
           reference-tags: final
 
-      # The action proposes no tag spelling, so the workflow composes one out of
-      # what it already knows: the version from the entry, the suffix from the
-      # branch it is running on, and the ordinal from its own run number.
-      # Whatever cuts tags in this repository reads this value.
-      #
-      # already-tagged is false for the whole life of the branch, because the
-      # tags cut here name 1.3.0-pre.N and the entry names 1.3.0. It turns true
-      # once the final tag exists, which is how this step knows to stop.
+      # The action proposes no tag spelling: it reports the version off the
+      # newest entry and whether a tag already names it, and how a repository
+      # spells a tag belongs to whatever cuts them. This step composes and cuts,
+      # and it is the only place a tag spelling is chosen on this branch.
       #
       # The version reaches the script through the environment and never through
       # ${{ }} expansion: it comes from a file a contributor wrote.
-      - name: The pre-release tag for this run
-        id: pre
-        if: steps.changelog.outputs.already-tagged == 'false'
+      - name: Cut the pre-release tag
         env:
           VERSION: ${{ steps.changelog.outputs.version }}
+          TAGGED: ${{ steps.changelog.outputs.already-tagged }}
+          PRERELEASE: ${{ steps.changelog.outputs.prerelease }}
         run: |
-          suffix="${GITHUB_REF_NAME##*-}"
-          tag="v$VERSION-$suffix.$GITHUB_RUN_NUMBER"
-          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          # Every condition below is a no-op rather than a defect: the document
+          # is correct and there is nothing here to cut, so the run stays green
+          # and says why. A changelog that does not validate is not among them.
+          # The action runs at its default fail-on: error, which fails this job
+          # before this step, and annotates the line at fault rather than
+          # summarising it here.
+          skip() { echo "$1"; echo "$1" >>"$GITHUB_STEP_SUMMARY"; exit 0; }
+          [ -n "$VERSION" ] || skip "No pre-release: the changelog names no version."
+          # The entry names the release, never a pre-release of it. This step
+          # appends the only pre-release identifier the strategy uses, so an
+          # entry carrying one of its own composes into nonsense.
+          [ "$PRERELEASE" = false ] || skip "No pre-release: $VERSION is a pre-release, and the entry names releases."
+          # already-tagged is false for the whole life of the branch, because the
+          # tags cut here name 1.3.0-pre.N and the entry names 1.3.0. It turns
+          # true once the final tag exists, and that is this branch's end signal
+          # rather than a precondition: the release shipped, so there is nothing
+          # left to stabilize here.
+          [ "$TAGGED" = false ] || skip "No pre-release: v$VERSION is tagged, so this branch is spent."
+
+          # Safe because the trigger above admits no branch without a stage
+          # suffix. A repository that splits this file per stage drops this line
+          # and states STAGE in the job's env: instead.
+          STAGE="${GITHUB_REF_NAME##*-}"
+
+          # The highest ordinal already cut for this version and stage, plus one.
+          # It is read from the tags rather than from github.run_number, which
+          # counts a workflow *file's* runs: renaming this file resets it to 1
+          # and the next run dies on a tag an earlier name already cut. A counter
+          # scoped to the thing being numbered cannot drift from it.
+          #
+          # The grep drops anything whose ordinal is not a bare integer. A
+          # repository that once numbered its pre-releases in two segments
+          # carries tags like v1.3.0-pre.12.480, which the glob matches and
+          # sort -n ranks above every single-segment ordinal, so without the
+          # filter the sequence resumes inside a retired scheme's numbering.
+          prev=$(git tag --list "v$VERSION-$STAGE.*" \
+                 | sed "s|^v$VERSION-$STAGE\.||" \
+                 | grep -E '^[0-9]+$' | sort -n | tail -1)
+          tag="v$VERSION-$STAGE.$(( ${prev:-0} + 1 ))"
+
+          git tag "$tag"
+          git push origin "refs/tags/$tag"
+          echo "Cut **$tag**." >>"$GITHUB_STEP_SUMMARY"

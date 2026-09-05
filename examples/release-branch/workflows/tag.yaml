@@ -1,0 +1,69 @@
+name: Changelog
+
+# The publish-time invocation. Whatever builds and publishes a tag reads the
+# changelog for its release notes, and under this strategy it runs on the
+# pre-release tags the stabilization branch cuts as well as on the final tag.
+#
+# That is what makes undated-entry a problem here and not only on the branch. At
+# a pre-release tag the newest entry is legitimately open, so the check that
+# calls an undated newest entry a defect fails the *build* rather than the
+# document, on a document that is correct. A workflow that never mentions the
+# stabilization branch is the one that breaks.
+on:
+  push:
+    tags:
+      # * spans everything but /, so the first pattern already admits a
+      # pre-release tag. The second states the spelling the stabilization branch
+      # cuts rather than leaving it to be inferred from the first.
+      - 'v*.*.*'
+      - 'v*.*.*-*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The tag-dependent checks read the repository's tags, and a default
+          # checkout carries none: no-git-tags fires and names this line.
+          fetch-depth: 0
+      - uses: mikluko/action-changelog@v1
+        id: changelog
+        with:
+          sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
+          error: prerelease-entry
+          # Quoted because YAML 1.1 reads a bare off as false, and the input has
+          # to survive whichever parser reads this file.
+          #
+          # undated-release is not beside it here either, and this is the
+          # invocation where it earns its place most plainly: a tag already names
+          # the version, so an undated newest entry is a release that shipped and
+          # nobody dated.
+          "off": undated-entry
+
+      # The notes are the changelog's newest entry, which is this tag's entry
+      # only when that entry names this tag. 1.3.0 never equals 1.3.0-pre.3, so a
+      # pre-release tag files no release: it is a build of a version the
+      # changelog has not released yet, and the notes belong to the final tag.
+      #
+      # The same comparison refuses a tag pushed by hand at a commit the newest
+      # entry does not describe, which is why a repository that publishes from a
+      # changelog usually carries it already.
+      - name: File the release
+        if: format('v{0}', steps.changelog.outputs.version) == github.ref_name
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          NOTES: ${{ steps.changelog.outputs.notes }}
+        run: |
+          # Rerunning the build refiles the notes rather than failing on the
+          # release it filed the first time.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes "$NOTES"
+          else
+            gh release create "$TAG" --title "$TAG" --notes "$NOTES" --verify-tag
+          fi
+          echo "Filed **$TAG**." >>"$GITHUB_STEP_SUMMARY"

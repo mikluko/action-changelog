@@ -6,7 +6,7 @@ name: Changelog
 # nothing in the binary knows which. The two push invocations decide, once the
 # commit has landed somewhere.
 #
-# prerelease-entry is raised here as it is on the other two, and that is where
+# prerelease-entry is raised here as it is on the other three, and that is where
 # release-trunk parts company: there a candidate can only be written as an entry,
 # so a release pull request may legitimately carry a pre-release heading while it
 # is under discussion. Under this strategy there is no such moment.
