@@ -182,6 +182,7 @@ func TestReleaseBranchWorkflowInputs(t *testing.T) {
 	}{
 		{branchStable, map[string]string{
 			"sections":       exampleSections,
+			"error":          changelog.CheckPrereleaseEntry,
 			"off":            changelog.CheckUndatedEntry,
 			"reference-tags": "final",
 		}},
@@ -191,6 +192,7 @@ func TestReleaseBranchWorkflowInputs(t *testing.T) {
 		}},
 		{branchRequest, map[string]string{
 			"sections": exampleSections,
+			"error":    changelog.CheckPrereleaseEntry,
 			"off":      changelog.CheckUndatedEntry,
 		}},
 	} {
@@ -241,10 +243,12 @@ func TestReleaseBranchBrokenChangelogFailsWithTheFindingsItClaims(t *testing.T) 
 		{branchStable, []string{
 			changelog.CheckPartialLinkRef,
 			changelog.CheckHeadingForm,
+			changelog.CheckPrereleaseEntry,
 		}},
 		{branchRequest, []string{
 			changelog.CheckPartialLinkRef,
 			changelog.CheckHeadingForm,
+			changelog.CheckPrereleaseEntry,
 		}},
 		{branchMain, []string{
 			changelog.CheckUndatedEntry,

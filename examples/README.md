@@ -19,6 +19,7 @@ product.
 | Workflow invocations | two | three |
 | `undated-entry` | at its default, `error` | switched off on the stabilization branch, and nowhere else |
 | `undated-release` | at its default, `error` | at its default, `error` |
+| `prerelease-entry` | raised on the trunk, left off on pull requests | raised on all three invocations |
 
 **release-trunk** is for a repository whose releases are decided in one commit:
 the entry is written with its date, it merges, and the tag is cut. One branch,

@@ -92,6 +92,15 @@ cut there name `1.3.0-pre.N` and the entry names `1.3.0`. It turns `true` once
 the final tag exists, which is the workflow's own signal that the branch is
 spent.
 
+Because a candidate is a tag here, it is never a heading, and that is why
+`prerelease-entry` is raised to `error` on all three invocations. It is the
+second policy separating the two strategies. Under
+[`../release-trunk/`](../release-trunk/) a candidate can only be expressed as an
+entry, so a release pull request may legitimately carry a pre-release heading
+while it is under discussion, and the check stays off there. Under
+release-branch no such moment exists, so a pre-release heading anywhere in the
+document is a mistake and every invocation says so.
+
 ## `reference-tags: final`, and why it is a requirement
 
 `reference-tags` decides which tags may be the reference tag the checks that read
@@ -119,7 +128,7 @@ Four inputs across three files, and no two files carry the same set.
 | runs on | a push to `release/*` | a push to `main` | a pull request |
 | `sections` | the six plus `Breaking` | the six plus `Breaking` | the six plus `Breaking` |
 | `off` | `undated-entry` | *(unset)* | `undated-entry` |
-| `error` | *(unset)* | `prerelease-entry` | *(unset)* |
+| `error` | `prerelease-entry` | `prerelease-entry` | `prerelease-entry` |
 | `reference-tags` | `final` | *(default)* | *(default)* |
 
 `off` is quoted in both files that carry it, because YAML 1.1 reads a bare `off`
@@ -152,10 +161,9 @@ one per check:
 | `1.2.0`, below the newest entry, also carries no date | `heading-form` |
 | `## [1.1.0-pre.3]`, a pre-release entry where this strategy keeps pre-releases in tags | `prerelease-entry` |
 
-`prerelease-entry` is off by default and raised only on the trunk invocation, so
-only that invocation reports the third. That invocation also reports
-`undated-entry` on the open entry, for the same reason it reports it on
-`CHANGELOG.md`.
+All three invocations report all three, because all three raise
+`prerelease-entry`. The trunk invocation reports a fourth, `undated-entry` on the
+open entry, for the same reason it reports it on `CHANGELOG.md`.
 
 `go test ./...` runs both documents under the inputs all three workflows carry
 and holds the broken one to exactly those lists. An example that rots is worse
