@@ -52,7 +52,7 @@ jobs:
       #
       # The version reaches the script through the environment and never through
       # ${{ }} expansion: it comes from a file a contributor wrote.
-      - name: The pre-release this run publishes
+      - name: The pre-release tag for this run
         id: pre
         if: steps.changelog.outputs.already-tagged == 'false'
         env:
@@ -61,4 +61,3 @@ jobs:
           suffix="${GITHUB_REF_NAME##*-}"
           tag="v$VERSION-$suffix.$GITHUB_RUN_NUMBER"
           echo "tag=$tag" >>"$GITHUB_OUTPUT"
-          echo "This run publishes **$tag**." >>"$GITHUB_STEP_SUMMARY"

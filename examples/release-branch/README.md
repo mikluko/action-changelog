@@ -2,9 +2,9 @@
 
 A release opens on a branch of its own. Its entry names a version and carries no
 date, because the release date is not known while the branch is still
-accumulating. Every run on that branch publishes a pre-release build under a tag
-the workflow composes. Merging to the trunk dates the entry and cuts the final
-tag.
+accumulating. Every run on that branch composes a pre-release tag,
+`X.Y.Z-pre.N`, for whatever publishes downstream. Merging to the trunk dates the
+entry and cuts the final tag.
 
 A complete policy: a changelog written to it, and the three workflow invocations
 that hold a repository to it. Everything here is generic. Copy the workflows
@@ -26,7 +26,7 @@ Three states, and the middle one is what this strategy turns on.
 | `## [1.3.0] - 2026-09-12` | names a version and a date: a released entry |
 
 An open entry is illegal under Keep a Changelog, which is why `undated-entry`
-defaults to `error`. Switching it off is how one branch says the entry above it
+defaults to `error`. Switching it off is how one branch says its newest entry
 is open rather than malformed, and that switch belongs to that branch alone.
 
 Two things do not move with it.
@@ -66,7 +66,7 @@ belongs to whatever cuts them. So the workflow composes the spelling, out of
 what it already knows:
 
 ```yaml
-- name: The pre-release this run publishes
+- name: The pre-release tag for this run
   id: pre
   if: steps.changelog.outputs.already-tagged == 'false'
   env:
@@ -131,8 +131,9 @@ branch, where the newest entry is legitimately open, or the trunk, where it is
 not, and nothing in the binary knows which. The two push invocations decide once
 the commit has landed somewhere. A repository that would rather keep one file may
 fold the two into a single workflow whose `on:` carries the push filter and
-`pull_request` together, since their inputs are the same; what it gives up is the
-place where each relaxation's reason is written down.
+`pull_request` together: the only input they differ in is `reference-tags`, and
+the value written there is the default the pull-request file already relies on.
+What it gives up is the place where each relaxation's reason is written down.
 
 ## The two documents
 
