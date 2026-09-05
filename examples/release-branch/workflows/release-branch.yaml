@@ -78,14 +78,18 @@ jobs:
       # ${{ }} expansion: it comes from a file a contributor wrote.
       - name: Cut the pre-release tag
         env:
-          VALID: ${{ steps.changelog.outputs.valid }}
           VERSION: ${{ steps.changelog.outputs.version }}
           TAGGED: ${{ steps.changelog.outputs.already-tagged }}
           PRERELEASE: ${{ steps.changelog.outputs.prerelease }}
         run: |
+          # Every condition below is a no-op rather than a defect: the document
+          # is correct and there is nothing here to cut, so the run stays green
+          # and says why. A changelog that does not validate is not among them.
+          # The action runs at its default fail-on: error, which fails this job
+          # before this step, and annotates the line at fault rather than
+          # summarising it here.
           skip() { echo "$1"; echo "$1" >>"$GITHUB_STEP_SUMMARY"; exit 0; }
-          [ "$VALID" = true ] || skip "No pre-release: the changelog does not validate."
-          [ -n "$VERSION" ]   || skip "No pre-release: the changelog names no version."
+          [ -n "$VERSION" ] || skip "No pre-release: the changelog names no version."
           # The entry names the release, never a pre-release of it. This step
           # appends the only pre-release identifier the strategy uses, so an
           # entry carrying one of its own composes into nonsense.
