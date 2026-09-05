@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-05
+
+### Added
+
+- **`undated-entry`, which fires where the newest entry names a version and
+  carries no date.** It defaults to `error`, inverting the rule that a policy
+  check is off by default: an entry with no date is illegal under Keep a
+  Changelog, so the majority case is that it should fire. A release opened on a
+  branch of its own names its version before its date is known, and switches the
+  check off in `off:` for that branch's invocation, the way a trunk invocation
+  switches `prerelease-entry` on. Fourteen checks.
+
+### Changed
+
+- `heading-form` accepts `## [1.2.3]` with no date on the newest versioned entry
+  only, which is the entry `undated-entry` then answers for. Every entry below
+  it has shipped and carries a date, so one missing there still fires
+  `heading-form`.
+
 ## [1.0.2] - 2026-09-04
 
 ### Fixed
@@ -86,7 +105,8 @@ recorded separately: nothing consumed them but this repository.
   candidate can be pulled and tested before it merges, and one reaching `main`
   is refused rather than published.
 
-[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/mikluko/action-changelog/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/mikluko/action-changelog/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/mikluko/action-changelog/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/mikluko/action-changelog/releases/tag/v1.0.0
