@@ -47,7 +47,13 @@ func TestLintFindings(t *testing.T) {
 		{
 			"heading is not a version",
 			[]string{"# Changelog", "", "## Release Two", "", "- a thing"},
-			CheckHeadingForm,
+			CheckUnreadableVersion,
+			"neither [Unreleased] nor a version",
+		},
+		{
+			"heading states two of the three version numbers",
+			[]string{"# Changelog", "", "## [1.1] - 2026-09-04", "", "- a thing"},
+			CheckUnreadableVersion,
 			"neither [Unreleased] nor a version",
 		},
 		{
@@ -259,5 +265,43 @@ func TestLintUndatedEntryOpensTheNewestEntry(t *testing.T) {
 	}
 	if got := Parse([]byte(strings.Join(lines, "\n"))).Lint(Options{Severities: severities}); len(got) != 0 {
 		t.Fatalf("findings on an open entry with undated-entry off: %v", got)
+	}
+}
+
+// A heading naming a version that cannot be read is reported by a check of its
+// own rather than by heading-form, which is what makes the two configurable
+// apart: heading-form asks about the shape of a heading, a question a
+// repository may reasonably differ on, and this one stands between a heading
+// nothing can read and the entry below it being taken for the newest.
+//
+// [Unreleased] names no version either and is no finding at all, which is the
+// one heading this check has to tell apart from an unreadable one.
+func TestLintUnreadableVersionIsSeparateFromHeadingForm(t *testing.T) {
+	lines := []string{
+		"# Changelog", "",
+		"## [Unreleased]", "",
+		"## [9.9]", "", "### Added", "", "- a thing", "",
+		"## [9.8.0] - 2026-01-01", "", "### Fixed", "", "- a bug",
+	}
+
+	got := lint(t, nil, lines...)
+	if len(got) != 1 {
+		t.Fatalf("findings %v, want exactly the %s one", got, CheckUnreadableVersion)
+	}
+	if got[0].Check != CheckUnreadableVersion || got[0].Severity != Error {
+		t.Errorf("finding %v raised by %q at %s, want %s at error",
+			got[0], got[0].Check, got[0].Severity, CheckUnreadableVersion)
+	}
+	if !strings.Contains(got[0].Msg, "9.9") {
+		t.Errorf("finding %v does not name the heading it is about", got[0])
+	}
+
+	severities := DefaultSeverities()
+	if err := severities.Set(CheckHeadingForm, Off); err != nil {
+		t.Fatal(err)
+	}
+	off := Parse([]byte(strings.Join(lines, "\n"))).Lint(Options{Severities: severities})
+	if len(off) != 1 || off[0].Check != CheckUnreadableVersion {
+		t.Errorf("findings %v with heading-form off, want the %s one", off, CheckUnreadableVersion)
 	}
 }
