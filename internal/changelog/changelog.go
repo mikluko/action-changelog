@@ -59,13 +59,20 @@ func (c *Changelog) Released() []Entry {
 	return out
 }
 
-// Latest returns the first entry naming a version, which is the one the
-// release ceremony publishes. It reports false for a document holding none.
+// Latest returns the newest entry naming a version, which is the one the
+// release ceremony publishes. It reports false for a document holding none,
+// and for one whose newest entry names a version that cannot be read: an entry
+// under such a heading is not the newest entry, and reporting it as one hands
+// the ceremony a release nobody wrote.
 func (c *Changelog) Latest() (Entry, bool) {
 	for _, e := range c.Entries {
-		if e.Version != "" {
-			return e, true
+		if e.Unreleased {
+			continue
 		}
+		if e.Version == "" {
+			return Entry{}, false
+		}
+		return e, true
 	}
 	return Entry{}, false
 }

@@ -84,8 +84,8 @@ func (c *Changelog) Lint(opts Options) []Finding {
 		switch {
 		case e.Unreleased:
 		case e.Version == "":
-			f.add(CheckHeadingForm, e.Line,
-				"heading %q is neither [Unreleased] nor a version and date, as in [1.2.3] - 2006-01-02", e.Raw)
+			f.add(CheckUnreadableVersion, e.Line,
+				"heading %q is neither [Unreleased] nor a version and date, as in [1.2.3] - 2006-01-02; a version states all three of major, minor and patch", e.Raw)
 		default:
 			switch {
 			case e.Date == "" && e.Line == newestLine && newestTag != "":
