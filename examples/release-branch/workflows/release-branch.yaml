@@ -23,7 +23,7 @@ jobs:
           # The tag-dependent checks read the repository's tags, and a default
           # checkout carries none: no-git-tags fires and names this line.
           fetch-depth: 0
-      - uses: mikluko/action-changelog@v0
+      - uses: mikluko/action-changelog@v1
         id: changelog
         with:
           sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking

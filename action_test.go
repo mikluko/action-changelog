@@ -1,16 +1,25 @@
 package main
 
 import (
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v3"
 
 	"github.com/mikluko/action-changelog/internal/changelog"
 )
 
-const image = "docker://ghcr.io/mikluko/action-changelog:"
+const (
+	image  = "docker://ghcr.io/mikluko/action-changelog:"
+	action = "mikluko/action-changelog@"
+	// Matching on the uses: prefix leaves the go run lines alone, where
+	// github.com/mikluko/action-changelog@latest is the correct reference.
+	uses = "uses: " + action
+)
 
 // TestVersionMatchesTheChangelog holds the two places a release names itself to
 // one version: CHANGELOG.md, and the image tag in action.yaml.
@@ -87,6 +96,54 @@ func TestActionDeclaresEveryOutput(t *testing.T) {
 		if !strings.Contains(args, "inputs."+name) && !strings.Contains(args, "inputs['"+name+"']") {
 			t.Errorf("input %q reaches no argument", name)
 		}
+	}
+}
+
+// Every documented invocation names the major tag the release workflow moves.
+// A reference the repository carries no tag for fails on the uses: line before
+// the action runs, so a reader copying one gets a broken workflow rather than
+// an old one.
+func TestDocumentedInvocationsNameTheCurrentMajor(t *testing.T) {
+	latest, ok := changelog.Parse(read(t, "CHANGELOG.md")).Latest()
+	if !ok {
+		t.Fatal("CHANGELOG.md names no released version")
+	}
+	want := action + semver.Major(latest.Version)
+
+	var found int
+	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if name := d.Name(); path != "." && strings.HasPrefix(name, ".") {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		switch filepath.Ext(path) {
+		case ".md", ".yaml", ".yml":
+		default:
+			return nil
+		}
+		for i, line := range strings.Split(string(read(t, path)), "\n") {
+			at := strings.Index(line, uses)
+			if at < 0 {
+				continue
+			}
+			found++
+			ref := strings.Fields(line[at+len("uses: "):])[0]
+			if ref != want {
+				t.Errorf("%s:%d names %q, want %q", path, i+1, ref, want)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found == 0 {
+		t.Fatalf("no invocation of %q found; this test is checking nothing", uses)
 	}
 }
 
