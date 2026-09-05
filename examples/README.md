@@ -1,72 +1,42 @@
-# A worked policy
+# Two worked policies
 
-One complete policy: a changelog written to it, and the two workflow
-invocations that hold a repository to it. Everything here is generic. Copy the
-workflows into `.github/workflows/`, copy the changelog's shape, and adjust the
-vocabulary and the link references to the repository.
+Two release strategies, each a complete worked example: a changelog written to
+it, the workflow invocations that hold a repository to it, a deliberately broken
+copy, and a README explaining both. `go test ./...` validates every document
+under the inputs those workflows carry, so the examples are executed rather than
+described.
 
-## The policy
+Everything here is generic. No example names a repository, an organisation or a
+product.
 
-- `Breaking` is a section heading beside the Keep a Changelog six. This is the
-  one place the policy departs from the specification, which marks a breaking
-  change inline as `**Breaking:**` inside the section it belongs to.
-- `## [Unreleased]` is permanent. A release is written below it as a new
-  version heading, and the Unreleased heading itself is never consumed.
-- Every version has a link reference definition at the foot of the file, so
-  every heading renders as a link rather than as literal text.
-- Version headings are `## [X.Y.Z] - YYYY-MM-DD`, versions descending.
-- No entry names a pre-release version, though the repository's tags may carry
-  one.
+## Which one
 
-## What it costs in configuration
-
-Two inputs, and the second only on one of the two invocations.
-
-| | [`workflows/main.yaml`](workflows/main.yaml) | [`workflows/pull-request.yaml`](workflows/pull-request.yaml) |
+| | [`release-trunk/`](release-trunk/) | [`release-branch/`](release-branch/) |
 |---|---|---|
-| `sections` | the six plus `Breaking` | the six plus `Breaking` |
-| `error` | `prerelease-entry` | *(unset)* |
+| Where a release is prepared | on the trunk | on `release/vX.Y-pre` |
+| The newest entry | names a version and a date | names a version and no date while the branch is open |
+| What a run hands downstream | the release, once the trunk finds the version untagged | `vX.Y.Z-pre.N`, composed on every run on the branch |
+| Workflow invocations | two | three |
+| `undated-entry` | at its default, `error` | switched off on the stabilization branch, and nowhere else |
+| `undated-release` | at its default, `error` | at its default, `error` |
+| `prerelease-entry` | raised on the trunk, left off on pull requests | raised on all three invocations |
 
-`sections` replaces the default vocabulary rather than adding to it, so the six
-are spelled out beside `Breaking`.
+**release-trunk** is for a repository whose releases are decided in one commit:
+the entry is written with its date, it merges, and the tag is cut. One branch,
+one ceremony, and the changelog is never in an intermediate state.
 
-`prerelease-entry` is off by default, because a pre-release heading is legal
-under the format and this policy is the one that forbids it. Raising it to an
-error on the main branch and leaving it off on pull requests is the whole of
-how the two branches differ: a release pull request may legitimately carry such
-a heading while it is under discussion, and nothing in the binary knows what a
-pull request is. The two files are otherwise identical, and a test holds them
-to that.
+**release-branch** is for a repository that stabilizes a release over days while
+the trunk keeps moving: a version is opened, testable builds come off the branch
+under their own pre-release tags, and the release date is written when the branch
+merges, because that is the first moment anybody knows it.
 
-## The two documents
+The state in the middle is the one thing the format has no word for, and it is
+what separates the two:
 
-[`CHANGELOG.md`](CHANGELOG.md) is written to the policy and passes under both
-invocations.
+    ## [Unreleased]            names no version                    unchanged, permanent
+    ## [1.3.0]                 names a version, carries no date     an open entry
+    ## [1.3.0] - 2026-09-12    names a version and a date           a released entry
 
-[`CHANGELOG.broken.md`](CHANGELOG.broken.md) departs from it four times, one
-per check:
-
-| Departure | Check |
-|---|---|
-| `### Notes`, a heading outside the vocabulary | `unknown-section` |
-| `## [2.2.0-rc.1]`, a pre-release entry | `prerelease-entry` |
-| `2.1.0` filed above `2.0.0` | `version-order` |
-| `1.4.1` with no link reference definition | `partial-link-refs` |
-
-`go test ./...` runs both documents under the inputs the two workflows carry
-and holds the broken one to exactly that list, minus `prerelease-entry` on the
-pull-request invocation. An example that rots is worse than none, so the
-example is executed rather than described.
-
-## What the tests here do not cover
-
-The four tag-dependent checks compare a document against the tags of the
-repository it lives in, and these documents live in this one, whose tags
-describe the action rather than the project the example is written for. They
-run in a consuming repository and not here.
-
-One of them interacts with the last policy bullet. `version-behind-tag`
-compares the newest entry against the newest version tag, and a pre-release tag
-sorts above the release below it, so a repository whose tags carry pre-releases
-while its changelog does not will find the newest entry reported as behind the
-newest tag.
+A repository on release-trunk that has never wanted a stabilization branch needs
+nothing from the other tree. Going the other way costs one branch, one workflow
+file, and one input.
