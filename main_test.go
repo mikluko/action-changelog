@@ -349,6 +349,28 @@ func TestOutputsOfADocumentNamingNoVersion(t *testing.T) {
 	}
 }
 
+// An entry naming a version and no date is the release a branch is still
+// accumulating, and the outputs answer for it: the version is the heading's and
+// the notes are the body's, neither of which is a date. It is invalid under the
+// defaults, which is what undated-entry being off on that branch settles.
+func TestOutputsDescribeAnUndatedNewestEntry(t *testing.T) {
+	path := write(t, "# Changelog\n\n## [1.1.0]\n\n### Added\n\n- a thing\n\n"+
+		"## [1.0.0] - 2026-01-01\n\n### Added\n\n- the first thing\n")
+
+	got := emitted(t, path, repoState{})
+	want := map[string]string{
+		"valid":      "false",
+		"version":    "1.1.0",
+		"notes":      "### Added\n\n- a thing",
+		"prerelease": "false",
+	}
+	for name, value := range want {
+		if got[name] != value {
+			t.Errorf("%s is %q, want %q", name, got[name], value)
+		}
+	}
+}
+
 // The notes are a body somebody else wrote, so an entry spelling out the
 // heredoc form is the case the delimiter has to survive.
 func TestACraftedEntryForgesNoOutput(t *testing.T) {

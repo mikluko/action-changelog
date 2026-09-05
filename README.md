@@ -127,7 +127,7 @@ annotation, and which is what `error`, `warn` and `off` take.
 
 | Check | Default | Description |
 |---|---|---|
-| `heading-form` | `error` | An entry heading states a version and a date, as in [1.2.3] - 2006-01-02. |
+| `heading-form` | `error` | An entry heading states a version and a date, as in [1.2.3] - 2006-01-02. The newest entry may omit the date, which undated-entry answers for. |
 | `date-format` | `error` | An entry's date is written YYYY-MM-DD. |
 | `version-order` | `error` | Entries run newest first, each version strictly below the one above it. |
 | `empty-entry` | `error` | A released entry carries something under it. |
@@ -136,6 +136,7 @@ annotation, and which is what `error`, `warn` and `off` take.
 | `date-future` | `error` | No entry is dated later than today. |
 | `partial-link-refs` | `error` | Every versioned entry has a link reference definition, once any entry does. |
 | `prerelease-entry` | `off` | Policy: no entry names a pre-release version. Off by default; pre-release headings are legal. |
+| `undated-entry` | `error` | Policy: the newest entry states a date as well as a version. Switched off, that entry may name a version with no date; every entry below it still needs both. |
 | `no-git-tags` | `error` | The repository's tag history can be read, which every check below needs. |
 | `version-behind-tag` | `error` | The newest entry is not behind the reference tag. |
 | `release-entry-modified` | `error` | A released entry is unchanged since the reference tag. |

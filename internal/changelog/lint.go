@@ -70,6 +70,10 @@ func (c *Changelog) Lint(opts Options) []Finding {
 
 	linked := anyLinkRef(c.Entries)
 	asOf := today()
+	newestLine := -1
+	if latest, ok := c.Latest(); ok {
+		newestLine = latest.Line
+	}
 
 	var prev Entry
 	for _, e := range c.Entries {
@@ -79,10 +83,15 @@ func (c *Changelog) Lint(opts Options) []Finding {
 			f.add(CheckHeadingForm, e.Line,
 				"heading %q is neither [Unreleased] nor a version and date, as in [1.2.3] - 2006-01-02", e.Raw)
 		default:
-			if e.Date == "" {
+			switch {
+			case e.Date == "" && e.Line == newestLine:
+				f.add(CheckUndatedEntry, e.Line,
+					"version %s carries no date; write it as [%s] - 2006-01-02, or switch this check off while the release is still accumulating on a branch of its own",
+					e.Version[1:], e.Version[1:])
+			case e.Date == "":
 				f.add(CheckHeadingForm, e.Line,
 					"version %s carries no date; write it as [%s] - 2006-01-02", e.Version[1:], e.Version[1:])
-			} else if !isDate(e.Date) {
+			case !isDate(e.Date):
 				f.add(CheckDateFormat, e.Line, "date %q is not YYYY-MM-DD", e.Date)
 			}
 			if prev.Version != "" && semver.Compare(e.Version, prev.Version) >= 0 {

@@ -54,6 +54,7 @@ const (
 	CheckDateFuture      = "date-future"
 	CheckPartialLinkRef  = "partial-link-refs"
 	CheckPrereleaseEntry = "prerelease-entry"
+	CheckUndatedEntry    = "undated-entry"
 
 	// These four read the repository rather than the document alone.
 	CheckNoGitTags               = "no-git-tags"
@@ -79,11 +80,14 @@ type Check struct {
 //
 // A check that catches a defect defaults to Error; a check that encodes a
 // policy defaults to Off, because a policy check's absence is the majority case
-// being correct.
+// being correct. undated-entry inverts the second half: it encodes a policy and
+// defaults to Error, because an entry with no date is illegal under Keep a
+// Changelog, and a release still accumulating on a branch of its own is the one
+// case that wants it.
 var Checks = []Check{
 	{
 		Name:        CheckHeadingForm,
-		Description: "An entry heading states a version and a date, as in [1.2.3] - 2006-01-02.",
+		Description: "An entry heading states a version and a date, as in [1.2.3] - 2006-01-02. The newest entry may omit the date, which undated-entry answers for.",
 		Default:     Error,
 	},
 	{
@@ -125,6 +129,11 @@ var Checks = []Check{
 		Name:        CheckPrereleaseEntry,
 		Description: "Policy: no entry names a pre-release version. Off by default; pre-release headings are legal.",
 		Default:     Off,
+	},
+	{
+		Name:        CheckUndatedEntry,
+		Description: "Policy: the newest entry states a date as well as a version. Switched off, that entry may name a version with no date; every entry below it still needs both.",
+		Default:     Error,
 	},
 	{
 		Name:        CheckNoGitTags,
