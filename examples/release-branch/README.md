@@ -96,6 +96,26 @@ this strategy rewriting it is the mechanism rather than an accident.
 | `error` | *(unset)* | `prerelease-entry` | *(unset)* |
 | `reference-tags` | `final` | *(default)* | *(default)* |
 
+## The tag is cut in a job of its own, so something can go in front of it
+
+Every push to a release branch publishes, and a push arrives without a pull
+request. A merge to the trunk is gated because it comes through one; a push here
+is gated by nothing. Under release-trunk that barely bites, since a push to the
+trunk publishes a release and those are rare and reviewed. Here it is every push.
+
+The example carries no test job — these demonstrate the action, not a whole
+pipeline — but the seam one needs is there:
+
+```yaml
+  tag:
+    needs: [changelog]        # add your test job here
+```
+
+`needs:` is a job-level key, so the cut has to be a job for a gate to have
+anywhere to attach. That is the only reason it is not a step alongside the
+action. Both files also keep `contents: read` at the top and grant
+`contents: write` on the `tag` job alone, so nothing but the cut can push.
+
 ## The two documents
 
 [`CHANGELOG.md`](CHANGELOG.md) is the branch's own state. It passes under the

@@ -13,14 +13,20 @@ on:
   push:
     branches: ['release/*']
 
-# The action reports and writes nothing and needs no token beyond the checkout's.
-# The step below pushes a tag, which is what contents: write is for.
+# Reading writes nothing. Only the job that pushes a tag is granted more, at that
+# job rather than here, so nothing else in the file can reach it.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   changelog:
     runs-on: ubuntu-latest
+    # Published for the tag job, which is a separate job and so cannot read
+    # another's steps.
+    outputs:
+      version: ${{ steps.changelog.outputs.version }}
+      prerelease: ${{ steps.changelog.outputs.prerelease }}
+      already-tagged: ${{ steps.changelog.outputs.already-tagged }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -47,28 +53,40 @@ jobs:
           # rewritten for the next candidate.
           reference-tags: final
 
-      # The tag is the version the entry names, with a v in front. Nothing is
-      # composed: writing 1.3.0-rc.2 in the heading is what cuts v1.3.0-rc.2, and
-      # a second candidate is that heading rewritten rather than this job run
-      # again.
-      #
-      # Two guards, and the trunk carries the same two with one word changed.
-      # This branch cuts what the entry names while that version is a
-      # pre-release; the trunk cuts it while it is final. Dropping the identifier
-      # is how a branch says the release is ready, so cutting it here would take
-      # the final tag off the trunk.
-      #
+  # The tag is cut in a job of its own so that something can be put in front of
+  # it. Every push to this branch publishes, and a push arrives without a pull
+  # request, so nothing else gates it: add your test job to the repository and
+  # name it in needs: below, and a push that does not build cuts no tag.
+  #
+  # That seam is the whole reason this is a job rather than a step. A step in the
+  # job above has no boundary a needs: can be inserted at.
+  tag:
+    needs: [changelog]
+    # The tag is the version the entry names, with a v in front. Nothing is
+    # composed: writing 1.3.0-rc.2 in the heading is what cuts v1.3.0-rc.2, and a
+    # second candidate is that heading rewritten rather than this job run again.
+    #
+    # Two guards, and the trunk carries the same two with one word changed. This
+    # branch cuts what the entry names while that version is a pre-release; the
+    # trunk cuts it while it is final. Dropping the identifier is how a branch
+    # says the release is ready, so cutting it here would take the final tag off
+    # the trunk.
+    if: >-
+      needs.changelog.outputs.prerelease == 'true' &&
+      needs.changelog.outputs.already-tagged == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
       # A tag pushed with the default GITHUB_TOKEN triggers no workflow. A
       # repository whose publish runs on the tag passes a token of its own here.
       #
       # The version reaches the script through the environment and never through
       # ${{ }} expansion: it comes from a file a contributor wrote.
       - name: Cut the candidate
-        if: >-
-          steps.changelog.outputs.prerelease == 'true' &&
-          steps.changelog.outputs.already-tagged == 'false'
         env:
-          VERSION: ${{ steps.changelog.outputs.version }}
+          VERSION: ${{ needs.changelog.outputs.version }}
         run: |
           git tag "v$VERSION"
           git push origin "v$VERSION"
