@@ -156,6 +156,106 @@ annotation, and which is what `error`, `warn` and `off` take.
 
 <!-- checks:end -->
 
+## SemVer compliance
+
+`version` is a Semantic Versioning 2.0.0 string. Several widely used tools
+diverge from that specification in ways documented where each tool lives and
+nowhere near the specification itself, so a reader holding a valid version has
+no way to meet them except by running into one.
+
+Each entry below states what a named tool does, under what input. What that
+means for any particular arrangement is the reader's to judge.
+
+### What this action accepts
+
+A version heading is read as Semantic Versioning 2.0.0 exactly: three
+components, no shorthand, no leading `v`.
+
+| heading | | |
+|---|---|---|
+| `## [1.2.3] - 2026-01-01` | accepted | |
+| `## [1.2.3-rc.1] - 2026-01-01` | accepted | a pre-release is a version |
+| `## [1.2.3+build.1] - 2026-01-01` | accepted | build metadata is valid SemVer |
+| `## [1.2]` | rejected | a version states all three components |
+| `## [v1.2.3]` | rejected | the leading `v` belongs to a tag, not to the specification |
+| `## [01.2.3]` | rejected | a numeric identifier carries no leading zero |
+
+Two departures from the specification are this project's own:
+
+- **A component past 2^64-1 is rejected**, where the specification sets no upper
+  bound on major, minor or patch.
+- **A git tag is read more loosely than a heading.** A tag namespace carries a
+  leading `v`, and the GitHub Actions convention keeps a moving `v1` beside the
+  `v1.0.0` it points at, so `v1`, `v1.2` and `v1.2.3` all read as versions when
+  they name a tag. Where two tags name one version, the fuller spelling is the
+  one taken to have cut the release.
+
+### `golang.org/x/mod/semver`
+
+Its package documentation declares two deviations from Semantic Versioning
+2.0.0: it **requires a leading `v`**, and it recognises **`vMAJOR` and
+`vMAJOR.MINOR`** — with no pre-release or build suffix — as shorthands for
+`vMAJOR.0.0` and `vMAJOR.MINOR.0`. It describes itself as implementing
+*comparison* of version strings rather than validation.
+
+`Canonical` fills in a missing `.MINOR` or `.PATCH` and **discards build
+metadata**, so `v1.2.3+build.1` canonicalises to `v1.2.3`, and the package
+documents that two versions compare equal only if their canonical forms are an
+identical string.
+
+Read against `golang.org/x/mod` v0.40.0.
+
+### `Masterminds/semver/v3`
+
+A constraint admits a pre-release version only where the **constraint's own
+literal carries a pre-release token**. The width of the range does not enter
+into it.
+
+| constraint | `1.2.3` | `1.2.3-rc.1` | `1.2.3+build.1` |
+|---|---|---|---|
+| `*` | ✓ | ✗ | ✓ |
+| `>=0.0.0` | ✓ | ✗ | ✓ |
+| `1.2.x` | ✓ | ✗ | ✓ |
+| `^1.0.0` | ✓ | ✗ | ✓ |
+| `>=1.0.0 <2.0.0` | ✓ | ✗ | ✓ |
+| `>=0.0.0-0` | ✓ | ✓ | ✓ |
+| `1.2.x-0` | ✓ | ✓ | ✓ |
+| `^1.0.0-0` | ✓ | ✓ | ✓ |
+| `1.2.3-rc.1` | ✗ | ✓ | ✗ |
+
+The library documents this as deliberate, following npm and Cargo rather than
+strict SemVer precedence. Build metadata is ignored throughout, per section 10.
+
+Measured against v3.5.0.
+
+### Selecting from a range is not matching against one
+
+Where a tool resolves a range by taking the highest version that matches, two
+rules apply in order: the constraint decides what matches at all, and section 11
+then ranks a pre-release **below** the version it qualifies. So a range that
+admits both a final release and its pre-releases resolves to the final.
+
+FluxCD's `OCIRepository.spec.ref.semver` is one such. `getTagBySemver` in
+`internal/controller/ocirepository_controller.go` builds a constraint with
+`Masterminds/semver/v3`, keeps every tag that satisfies it, sorts the matches in
+reverse and takes the first. Both rules above therefore apply to it, the first
+because of which library it is: `semver: "*"` collects no pre-release tag at all.
+
+Read against `fluxcd/source-controller` v1.9.5.
+
+### OCI tag grammar
+
+The OCI distribution specification requires a tag to be at most 128 characters
+and to match:
+
+```
+[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}
+```
+
+`+` is not in that grammar, so a version carrying build metadata is not an OCI
+tag verbatim. Git ref syntax does permit `+`: `git check-ref-format
+refs/tags/v1.2.3+build.1` succeeds. The two disagree about the same string.
+
 ## Two worked policies
 
 [`examples/`](examples/) carries two named release strategies, each as a

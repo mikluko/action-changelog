@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   described from the wrong entry. It is the split `undated-entry` and
   `undated-release` made, for the same reason. Sixteen checks.
 
+- **A SemVer compliance section in the README**, stating what this action
+  accepts as a version and what four named tools do with one: `x/mod/semver`'s
+  two documented deviations, `Masterminds/semver/v3` admitting a pre-release
+  only where the constraint's own literal carries one, the difference between
+  matching a range and selecting from it, and the OCI tag grammar having no `+`.
+  Each is documented where its own tool lives and nowhere near the
+  specification, so a reader holding a valid version had no way to meet them
+  except by running into one. Every entry names the version it was read against.
+
 - **`date-mismatch`, for a released entry whose date is not the day its tag was
   cut**, at `error`. Nothing compared the two: `date-format` reads the shape,
   `date-order` and `date-future` read the document alone, and the immutability
