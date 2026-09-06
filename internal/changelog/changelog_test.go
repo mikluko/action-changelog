@@ -29,8 +29,8 @@ func TestParseHeadingForms(t *testing.T) {
 		// to say, and not this parser's.
 		{name: "build metadata", in: "[1.2.3+build.1] - 2026-09-04", version: "v1.2.3+build.1", date: "2026-09-04"},
 
-		// The leading "v" is golang.org/x/mod/semver's requirement, not the
-		// specification's, and a heading is not a tag.
+		// The leading "v" belongs to a tag namespace, not to the specification,
+		// and a heading is not a tag.
 		{name: "v prefix", in: "[v1.2.3] - 2026-09-04", rule: semver.RuleVPrefix},
 
 		{name: "not a version", in: "[Yanked] - 2026-09-04", rule: semver.RuleCore},
@@ -40,11 +40,16 @@ func TestParseHeadingForms(t *testing.T) {
 		{name: "empty prerelease", in: "[1.2.3-] - 2026-09-04", rule: semver.RuleEmptyIdent},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			v, d, u, err := parseHeading(tc.in)
-			if v != tc.version || d != tc.date || u != tc.unreleased {
+			e := Entry{Raw: tc.in}
+			parseHeading(&e)
+			if e.Version != tc.version || e.Date != tc.date || e.Unreleased != tc.unreleased {
 				t.Errorf("parseHeading(%q) = (%q, %q, %v), want (%q, %q, %v)",
-					tc.in, v, d, u, tc.version, tc.date, tc.unreleased)
+					tc.in, e.Version, e.Date, e.Unreleased, tc.version, tc.date, tc.unreleased)
 			}
+			if tc.version != "" && e.Semver.Tag() != tc.version {
+				t.Errorf("parseHeading(%q).Semver = %q, want %q", tc.in, e.Semver.Tag(), tc.version)
+			}
+			err := e.VersionErr
 			if tc.rule == "" {
 				if err != nil {
 					t.Errorf("parseHeading(%q) = %v, want no error", tc.in, err)

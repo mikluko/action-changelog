@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	xsemver "golang.org/x/mod/semver"
-
 	"github.com/mikluko/action-changelog/internal/semver"
 )
 
@@ -94,7 +92,7 @@ func (c *Changelog) Lint(opts Options) []Finding {
 	// can decide is reported as the first.
 	newestLine, newestTag := -1, ""
 	if latest, ok := c.Latest(); ok {
-		newestLine, newestTag = latest.Line, opts.Git.tag(latest.Version)
+		newestLine, newestTag = latest.Line, opts.Git.tag(latest)
 	}
 
 	var prev Entry
@@ -120,7 +118,7 @@ func (c *Changelog) Lint(opts Options) []Finding {
 			case !isDate(e.Date):
 				f.add(CheckDateFormat, e.Line, "date %q is not YYYY-MM-DD", e.Date)
 			}
-			if prev.Version != "" && xsemver.Compare(e.Version, prev.Version) >= 0 {
+			if prev.Version != "" && semver.Compare(e.Semver, prev.Semver) >= 0 {
 				f.add(CheckVersionOrder, e.Line,
 					"version %s does not come before %s, which is above it; entries run newest first",
 					e.Version[1:], prev.Version[1:])
@@ -142,7 +140,7 @@ func (c *Changelog) Lint(opts Options) []Finding {
 					"version %s has no link reference definition, while others do; it renders as literal text",
 					e.Version[1:])
 			}
-			if xsemver.Prerelease(e.Version) != "" {
+			if e.Semver.Prerelease() {
 				f.add(CheckPrereleaseEntry, e.Line,
 					"version %s is a pre-release", e.Version[1:])
 			}

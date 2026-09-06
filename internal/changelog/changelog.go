@@ -45,6 +45,10 @@ type Entry struct {
 	// rule the heading broke, so a finding can report that rule rather than
 	// restating the grammar, and it is nil for every other entry.
 	VersionErr error
+	// Semver is the parsed form of Version, which is what entries are ordered
+	// and matched against tags by. Version is its tag spelling, kept because it
+	// is what a map keys on and what a message prints.
+	Semver semver.Version
 }
 
 // Changelog is a parsed document. Entries keep document order, so the first
@@ -84,11 +88,14 @@ func (c *Changelog) Latest() (Entry, bool) {
 }
 
 // Find returns the entry for version, which may be given with or without the
-// leading "v".
+// leading "v" and in the shorthand a tag namespace allows.
 func (c *Changelog) Find(version string) (Entry, bool) {
-	want := canonical(version)
+	want, err := semver.ParseTag(version)
+	if err != nil {
+		return Entry{}, false
+	}
 	for _, e := range c.Entries {
-		if e.Version != "" && e.Version == want {
+		if e.Version != "" && semver.Compare(e.Semver, want) == 0 {
 			return e, true
 		}
 	}
@@ -130,7 +137,7 @@ func Parse(src []byte) *Changelog {
 			Raw:  headingText(src, h),
 			Line: lineOf(src, headingStart(src, h)),
 		}
-		e.Version, e.Date, e.Unreleased, e.VersionErr = parseHeading(e.Raw)
+		parseHeading(&e)
 		e.Sections, e.Body = collect(src, h, next)
 		if label, bracketed := headingLabel(e.Raw); bracketed {
 			e.LinkRef = defined[strings.ToLower(label)]
@@ -299,22 +306,23 @@ func lineOf(src []byte, off int) int {
 	return bytes.Count(src[:off], []byte("\n")) + 1
 }
 
-// parseHeading reads an entry heading of the form "[1.2.3] - 2026-09-04" or
-// "[Unreleased]". Brackets are optional, and so is the date.
+// parseHeading reads e.Raw into the version, date and Unreleased fields of e.
 //
 // The version token is read as Semantic Versioning 2.0.0 with no shorthand and
-// no leading "v", so a heading naming "1.2" or "v1.2.3" states no version. The
-// error says which rule it broke.
-func parseHeading(raw string) (version, date string, unreleased bool, err error) {
-	name, rest := splitHeading(raw)
+// no leading "v", so a heading naming "1.2" or "v1.2.3" states no version and
+// e.VersionErr says which rule it broke.
+func parseHeading(e *Entry) {
+	name, rest := splitHeading(e.Raw)
 	if strings.EqualFold(name, "unreleased") {
-		return "", strings.TrimSpace(rest), true, nil
+		e.Date, e.Unreleased = strings.TrimSpace(rest), true
+		return
 	}
 	v, err := semver.Parse(name)
 	if err != nil {
-		return "", "", false, err
+		e.VersionErr = err
+		return
 	}
-	return "v" + v.String(), strings.TrimSpace(rest), false, nil
+	e.Semver, e.Version, e.Date = v, v.Tag(), strings.TrimSpace(rest)
 }
 
 // splitHeading separates the version token from whatever follows it: the text
@@ -332,16 +340,4 @@ func splitHeading(raw string) (name, rest string) {
 		return raw, ""
 	}
 	return name, strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(after), "-"))
-}
-
-// canonical adds the "v" that golang.org/x/mod/semver requires.
-func canonical(v string) string {
-	v = strings.TrimSpace(v)
-	if v == "" {
-		return ""
-	}
-	if v[0] != 'v' && v[0] != 'V' {
-		return "v" + v
-	}
-	return "v" + v[1:]
 }

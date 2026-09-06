@@ -1,7 +1,7 @@
 package changelog
 
 import (
-	"golang.org/x/mod/semver"
+	"github.com/mikluko/action-changelog/internal/semver"
 )
 
 // Git is what the tag-dependent checks read about the repository the document
@@ -38,12 +38,15 @@ type Git struct {
 // not be read. Neither is evidence that a tag exists, so both answer "": a run
 // that could not read the tags reports no-git-tags by name and accuses nobody of
 // having shipped a release it left undated.
-func (g *Git) tag(version string) string {
-	if g == nil || g.Err != nil || version == "" {
+func (g *Git) tag(e Entry) string {
+	if g == nil || g.Err != nil || e.Version == "" {
 		return ""
 	}
 	for _, name := range g.Tags {
-		if semver.Canonical(canonical(name)) == version {
+		// Compare rather than string equality, so build metadata is ignored on
+		// both sides the way section 10 says it is: a tag cannot carry a "+" at
+		// all, and an entry naming one still names the version the tag names.
+		if t, err := semver.ParseTag(name); err == nil && semver.Compare(t, e.Semver) == 0 {
 			return name
 		}
 	}
@@ -75,7 +78,8 @@ func (f *findings) git(c *Changelog, g *Git) {
 		return
 	}
 
-	if latest, ok := c.Latest(); ok && semver.Compare(latest.Version, canonical(g.ReferenceTag)) < 0 {
+	reference, refErr := semver.ParseTag(g.ReferenceTag)
+	if latest, ok := c.Latest(); ok && refErr == nil && semver.Compare(latest.Semver, reference) < 0 {
 		f.add(CheckVersionBehindTag, latest.Line,
 			"the newest entry is %s, which is behind the reference tag %s; an entry level with the tag is a release just made and one above it is a release pending",
 			latest.Version[1:], g.ReferenceTag)
@@ -100,7 +104,7 @@ func (f *findings) immutable(c *Changelog, g *Git) {
 	}
 	for _, was := range Parse(g.TaggedChangelog).Released() {
 		check := CheckReleaseEntryModified
-		if semver.Prerelease(was.Version) != "" {
+		if was.Semver.Prerelease() {
 			check = CheckPrereleaseEntryModified
 		}
 		is, ok := now[was.Version]

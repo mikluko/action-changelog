@@ -401,3 +401,51 @@ func write(t *testing.T, dir, name, content string) {
 		t.Fatal(err)
 	}
 }
+
+// The GitHub Actions convention keeps a moving major tag beside the full one it
+// points at. Both name the same version, and the fuller spelling wins the tie,
+// so the reference tag is the immutable v1.0.0 rather than the v1 that moves to
+// the next release under whoever checked it out.
+//
+// It is pinned because it rests on a tag namespace being laxer than Semantic
+// Versioning, which the specification's own grammar has no shorthand for: read
+// strictly, "v1" names no version at all and drops out of this list.
+func TestVersionsReadsTheMovingMajorTag(t *testing.T) {
+	got := git.Versions([]git.Tag{
+		{Name: "v1.0.0"},
+		{Name: "v1"},
+		{Name: "v0.9.0"},
+		{Name: "not-a-version"},
+		{Name: "v1.1"},
+	})
+	want := []string{"v1.1", "v1.0.0", "v1", "v0.9.0"}
+	if len(got) != len(want) {
+		t.Fatalf("versions are %v, want %v", names(got), want)
+	}
+	for i := range want {
+		if got[i].Name != want[i] {
+			t.Errorf("versions are %v, want %v", names(got), want)
+			break
+		}
+	}
+	for _, tc := range []struct{ name, version string }{
+		{"v1", "v1.0.0"},
+		{"v1.1", "v1.1.0"},
+		{"v1.0.0", "v1.0.0"},
+	} {
+		if got := (git.Tag{Name: tc.name}).Version(); got != tc.version {
+			t.Errorf("Tag(%q).Version() = %q, want %q", tc.name, got, tc.version)
+		}
+	}
+	if v := (git.Tag{Name: "not-a-version"}).Version(); v != "" {
+		t.Errorf("a tag naming no version reads as %q, want empty", v)
+	}
+}
+
+func names(tags []git.Tag) []string {
+	out := make([]string, len(tags))
+	for i, t := range tags {
+		out[i] = t.Name
+	}
+	return out
+}

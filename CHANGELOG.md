@@ -34,6 +34,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not the specification's: a major, minor or patch component past 2^64-1 is
   rejected, where the specification sets no bound.
 
+- **`golang.org/x/mod/semver` is gone**, and ordering is this project's too.
+  Sections 10 and 11 are where the specification stops being obvious: build
+  metadata is ignored for precedence, so `1.0.0+a` and `1.0.0+b` are one version
+  and two strings; a numeric pre-release identifier ranks below every identifier
+  that is not one; and numeric identifiers compare numerically with no upper
+  bound, which `1.0.0-99999999999999999999` needs and no fixed-width integer
+  gives. They carry no leading zero, so the longer of two is the larger and the
+  value is never read as a number.
+- **A tag is read by `ParseTag`, which is deliberately laxer than the
+  specification and says so.** A tag namespace carries a leading `v`, and the
+  GitHub Actions convention keeps a moving `v1` beside the `v1.0.0` it points
+  at; both name one version, and the fuller spelling still wins the tie for the
+  reference tag. That behaviour used to rest on `x/mod` accepting `vMAJOR`
+  shorthand as a side effect. It is now a named, tested contract of this
+  project's own, and read strictly it would have gone silently.
+- A tag now matches an entry by precedence rather than by string equality, so an
+  entry naming build metadata matches the tag naming its version. It could not
+  before, because canonicalisation dropped the metadata from one side only.
+
 ### Fixed
 
 - **The `release-branch` example cuts the version its changelog names, and
