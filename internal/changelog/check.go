@@ -56,6 +56,7 @@ const (
 	CheckDateMismatch      = "date-mismatch"
 	CheckPartialLinkRef    = "partial-link-refs"
 	CheckPrereleaseEntry   = "prerelease-entry"
+	CheckOCIIncompatible   = "oci-incompatible-version"
 	CheckUndatedEntry      = "undated-entry"
 
 	// These five read the repository rather than the document alone.
@@ -142,6 +143,11 @@ var Checks = []Check{
 		Name:        CheckPrereleaseEntry,
 		Description: "Policy: no entry names a pre-release version. Off by default; pre-release headings are legal.",
 		Default:     Off,
+	},
+	{
+		Name:        CheckOCIIncompatible,
+		Description: "A version can be an OCI tag. This is the one check whose subject is outside the document: build metadata is valid Semantic Versioning and the OCI tag grammar [a-zA-Z0-9_][a-zA-Z0-9._-]{0,127} has no +, so such a version cuts a git tag and is then not a name a registry takes. Switch it off where nothing is published.",
+		Default:     Error,
 	},
 	{
 		Name:        CheckUndatedEntry,

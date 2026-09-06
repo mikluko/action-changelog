@@ -34,6 +34,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   described from the wrong entry. It is the split `undated-entry` and
   `undated-release` made, for the same reason. Sixteen checks.
 
+- **`oci-incompatible-version`, for a version that is valid Semantic Versioning
+  and cannot be an OCI tag**, at `error` and switchable off. The specification
+  permits `1.2.3+build.1`; the OCI distribution specification's tag grammar is
+  `[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}`, which has no `+`. Git ref syntax does
+  permit it, so such a version cuts a tag and is then not a name a registry
+  takes. The finding names the character at fault, and the length bound is
+  checked too: a pre-release run has no bound in SemVer and a tag stops at 128.
+
+  **This is the first check whose subject is outside the document.** The other
+  seventeen are about the changelog or about the repository's tags; this one is
+  about what a version can become somewhere else, and the register says so
+  rather than pretending otherwise. A repository that publishes no image or
+  chart switches it off in `off:` and it never fires again. Eighteen checks.
+
 - **A SemVer compliance section in the README**, stating what this action
   accepts as a version and what four named tools do with one: `x/mod/semver`'s
   two documented deviations, `Masterminds/semver/v3` admitting a pre-release

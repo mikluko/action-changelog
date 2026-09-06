@@ -337,21 +337,21 @@ func TestLintUnreadableVersionNamesTheRule(t *testing.T) {
 }
 
 // Build metadata is valid Semantic Versioning, so the heading is readable and
-// this check is silent on it. Whether the version is one this repository wants
-// is a separate question, asked under a name of its own.
+// unreadable-version is silent on it. Whether the version is one this
+// repository wants is the separate question asked under a name of its own, and
+// the pair is the whole point of the split: the parser decides what a version
+// is, and oci-incompatible-version decides what it can become.
 func TestLintBuildMetadataIsAReadableVersion(t *testing.T) {
 	got := lint(t, nil,
 		"# Changelog", "",
 		"## [Unreleased]", "",
 		"## [1.2.3+build.1] - 2026-01-01", "", "### Added", "", "- a thing",
 	)
-	for _, f := range got {
-		if f.Check == CheckUnreadableVersion {
-			t.Errorf("finding %v: build metadata is a version the specification accepts", f)
-		}
+	if len(got) != 1 {
+		t.Fatalf("findings %v, want exactly one", got)
 	}
-	if len(got) != 0 {
-		t.Errorf("findings %v, want none", got)
+	if got[0].Check != CheckOCIIncompatible {
+		t.Errorf("finding %v raised by %q, want %s", got[0], got[0].Check, CheckOCIIncompatible)
 	}
 }
 

@@ -147,6 +147,7 @@ annotation, and which is what `error`, `warn` and `off` take.
 | `date-mismatch` | `error` | A released entry's date is the day its tag was cut. Silent for an entry no tag names, which is a release pending rather than a date that disagrees. |
 | `partial-link-refs` | `error` | Every versioned entry has a link reference definition, once any entry does. |
 | `prerelease-entry` | `off` | Policy: no entry names a pre-release version. Off by default; pre-release headings are legal. |
+| `oci-incompatible-version` | `error` | A version can be an OCI tag. This is the one check whose subject is outside the document: build metadata is valid Semantic Versioning and the OCI tag grammar [a-zA-Z0-9_][a-zA-Z0-9._-]{0,127} has no +, so such a version cuts a git tag and is then not a name a registry takes. Switch it off where nothing is published. |
 | `undated-entry` | `error` | Policy: the newest entry states a date, where no final tag yet names its version. Switched off, that entry is open: a release still accumulating on a branch of its own, whether or not a candidate has been cut from it. |
 | `undated-release` | `error` | The newest entry states a date, where a final tag already names its version. The release shipped and nobody dated it. A candidate tag is not one: it ships undated, which is what a stabilization branch is for. |
 | `no-git-tags` | `error` | The repository's tag history can be read, which every check comparing against it needs. |
@@ -255,6 +256,10 @@ and to match:
 `+` is not in that grammar, so a version carrying build metadata is not an OCI
 tag verbatim. Git ref syntax does permit `+`: `git check-ref-format
 refs/tags/v1.2.3+build.1` succeeds. The two disagree about the same string.
+
+`oci-incompatible-version` is where this action acts on that, and it is the one
+check whose subject is outside the document. A repository that publishes no
+image or chart switches it off.
 
 ## Two worked policies
 
