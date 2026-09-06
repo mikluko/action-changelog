@@ -160,6 +160,18 @@ func TestGitChecks(t *testing.T) {
 			want: []string{changelog.CheckUndatedRelease},
 		},
 		{
+			name: "an undated candidate its own tag names is still being written",
+			doc:  undatedCandidate,
+			git:  &changelog.Git{ReferenceTag: "v0.1.0", Tags: []string{"v0.1.0", "v0.2.0-rc.1"}},
+			want: []string{changelog.CheckUndatedEntry},
+		},
+		{
+			name: "a candidate tag does not date the release it was cut for",
+			doc:  undated,
+			git:  &changelog.Git{ReferenceTag: "v0.1.0", Tags: []string{"v0.1.0", "v0.2.0-rc.1"}},
+			want: []string{changelog.CheckUndatedEntry},
+		},
+		{
 			name: "tags nobody could read accuse nobody of shipping it undated",
 			doc:  undated,
 			git:  &changelog.Git{Err: errors.New("no git repository")},
@@ -185,6 +197,12 @@ func TestGitChecks(t *testing.T) {
 // A release still accumulating on a branch of its own leaves it in that state
 // and so does a release nobody dated, and only the tags tell the two apart.
 var undated = strings.Replace(tagged, "## [0.2.0] - 2026-02-01", "## [0.2.0]", 1)
+
+// undatedCandidate is the same document with its newest entry naming a
+// candidate rather than the release. It is the state a stabilization branch is
+// in for most of its life: the entry names what the next tag will be, and the
+// tag naming it has been cut.
+var undatedCandidate = strings.Replace(tagged, "## [0.2.0] - 2026-02-01", "## [0.2.0-rc.1]", 1)
 
 // The two are separately overridable, which is the whole of the split: a branch
 // accumulating a release switches undated-entry off, and a release that shipped
@@ -216,6 +234,26 @@ func TestUndatedChecksAreSeparatelyConfigurable(t *testing.T) {
 				t.Errorf("checks fired %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// The stabilization branch's own configuration, which is undated-entry off and
+// everything else at its default. A candidate ships its tag and stays undated
+// on purpose, so nothing fires.
+//
+// Reading any tag naming the entry as evidence that the release shipped made
+// every push after the first candidate a finding, on the one branch whose whole
+// purpose is to cut them. The split survives it: the case above this one holds
+// a final tag naming an undated entry to undated-release on the same settings.
+func TestUndatedCandidateIsSilentOnAStabilizationBranch(t *testing.T) {
+	sev := changelog.DefaultSeverities()
+	if err := sev.Set(changelog.CheckUndatedEntry, changelog.Off); err != nil {
+		t.Fatal(err)
+	}
+	git := &changelog.Git{ReferenceTag: "v0.1.0", Tags: []string{"v0.1.0", "v0.2.0-rc.1"}}
+	got := checks(changelog.Parse([]byte(undatedCandidate)).Lint(changelog.Options{Severities: sev, Git: git}))
+	if len(got) != 0 {
+		t.Errorf("checks fired %v on a candidate this branch has already cut, want none", got)
 	}
 }
 

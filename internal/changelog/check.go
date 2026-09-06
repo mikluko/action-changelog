@@ -139,12 +139,12 @@ var Checks = []Check{
 	},
 	{
 		Name:        CheckUndatedEntry,
-		Description: "Policy: the newest entry states a date, where no tag yet names its version. Switched off, that entry is open: a release still accumulating on a branch of its own.",
+		Description: "Policy: the newest entry states a date, where no final tag yet names its version. Switched off, that entry is open: a release still accumulating on a branch of its own, whether or not a candidate has been cut from it.",
 		Default:     Error,
 	},
 	{
 		Name:        CheckUndatedRelease,
-		Description: "The newest entry states a date, where a tag already names its version. The release shipped and nobody dated it.",
+		Description: "The newest entry states a date, where a final tag already names its version. The release shipped and nobody dated it. A candidate tag is not one: it ships undated, which is what a stabilization branch is for.",
 		Default:     Error,
 	},
 	{

@@ -86,10 +86,12 @@ func (c *Changelog) Lint(opts Options) []Finding {
 
 	linked := anyLinkRef(c.Entries)
 	asOf := today()
-	// An entry with no date is one of two things and the tags tell them apart:
-	// a release still being written, or a release that shipped and nobody
-	// dated. tag answers "" where they could not be read, so the case nothing
-	// can decide is reported as the first.
+	// An entry with no date is one of two things and a final tag naming it
+	// tells them apart: a release still being written, or a release that
+	// shipped and nobody dated. A candidate tag decides neither, because a
+	// candidate ships its tag and stays undated by design, so it leaves the
+	// entry open. tag answers "" where the tags could not be read, so the case
+	// nothing can decide is reported as the first.
 	newestLine, newestTag := -1, ""
 	if latest, ok := c.Latest(); ok {
 		newestLine, newestTag = latest.Line, opts.Git.tag(latest)
@@ -104,7 +106,11 @@ func (c *Changelog) Lint(opts Options) []Finding {
 				"heading %q is neither [Unreleased] nor a version and date, as in [1.2.3] - 2006-01-02: %s", e.Raw, versionReason(e))
 		default:
 			switch {
-			case e.Date == "" && e.Line == newestLine && newestTag != "":
+			// The tag is asked about through the entry rather than parsed
+			// again: tag matches by precedence, and section 11 counts the
+			// pre-release identifiers, so a tag naming this entry carries the
+			// same ones it does.
+			case e.Date == "" && e.Line == newestLine && newestTag != "" && !e.Semver.Prerelease():
 				f.add(CheckUndatedRelease, e.Line,
 					"version %s carries no date and tag %s already names it; the release shipped, so write its date as [%s] - 2006-01-02",
 					e.Version[1:], newestTag, e.Version[1:])
