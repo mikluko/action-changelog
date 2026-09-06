@@ -12,14 +12,20 @@ on:
   push:
     branches: [main]
 
-# The action reports and writes nothing and needs no token beyond the checkout's.
-# The step below pushes a tag, which is what contents: write is for.
+# Reading writes nothing. Only the job that pushes a tag is granted more, at that
+# job rather than here, so nothing else in the file can reach it.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   changelog:
     runs-on: ubuntu-latest
+    # Published for the tag job, which is a separate job and so cannot read
+    # another's steps.
+    outputs:
+      version: ${{ steps.changelog.outputs.version }}
+      prerelease: ${{ steps.changelog.outputs.prerelease }}
+      already-tagged: ${{ steps.changelog.outputs.already-tagged }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -32,15 +38,27 @@ jobs:
           sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
           error: prerelease-entry
 
-      # The stabilization branch's step with one word changed: final rather than
-      # pre-release. Both cut the version the entry names and neither composes
-      # one, which is the whole of the strategy in two guards.
+  # The stabilization branch's tag job with one word changed: final rather than
+  # pre-release. Both cut the version the entry names and neither composes one,
+  # which is the whole of the strategy in two guards.
+  #
+  # A merge to the trunk arrives through a pull request, so a repository with
+  # branch protection has already tested it. Naming a test job in needs: here
+  # closes the gap for a direct push as well, which is the case protection is
+  # usually configured to refuse rather than to test.
+  tag:
+    needs: [changelog]
+    if: >-
+      needs.changelog.outputs.prerelease == 'false' &&
+      needs.changelog.outputs.already-tagged == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
       - name: Cut the release
-        if: >-
-          steps.changelog.outputs.prerelease == 'false' &&
-          steps.changelog.outputs.already-tagged == 'false'
         env:
-          VERSION: ${{ steps.changelog.outputs.version }}
+          VERSION: ${{ needs.changelog.outputs.version }}
         run: |
           git tag "v$VERSION"
           git push origin "v$VERSION"

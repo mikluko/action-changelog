@@ -34,6 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   described from the wrong entry. It is the split `undated-entry` and
   `undated-release` made, for the same reason. Sixteen checks.
 
+- **The `release-branch` example cuts its tag in a job of its own**, so a test
+  job has somewhere to attach. Every push to a release branch publishes and a
+  push arrives without a pull request, so nothing gates it the way branch
+  protection gates a merge to the trunk — and with the cut as a step there was
+  no job boundary a `needs:` could be inserted at, so the shape resisted the fix
+  rather than merely omitting it. The example still carries no test job, because
+  these demonstrate the action rather than a whole pipeline; it names where one
+  goes. Both files now keep `contents: read` at the top and grant
+  `contents: write` on the tag job alone.
+
 - **`oci-incompatible-version`, for a version that is valid Semantic Versioning
   and cannot be an OCI tag**, at `error` and switchable off. The specification
   permits `1.2.3+build.1`; the OCI distribution specification's tag grammar is
