@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`unreadable-version`, a check of its own for an entry heading naming no
+  version that can be read**, at `error`, which leaves `heading-form` the shape
+  question its name is about. One check was doing both jobs and only one of them
+  is a policy: `heading-form` is about the form of a heading, which a repository
+  may reasonably differ on and switch off, and switching it off also switched
+  off the only thing standing between a heading nothing can read and a release
+  described from the wrong entry. It is the split `undated-entry` and
+  `undated-release` made, for the same reason. Sixteen checks.
+
+### Changed
+
+- **What counts as a version is Semantic Versioning 2.0.0 exactly**, read by a
+  parser written here rather than by `golang.org/x/mod/semver`, whose own package
+  doc declares two deviations from the specification: it requires a leading `v`,
+  and it recognises `vMAJOR` and `vMAJOR.MINOR` as alternatives to the
+  three-component form. Working around those cost a canonicalisation comparison
+  that carried a second policy nobody chose. Two headings change verdict:
+  `[v1.2.3]` named a version and now names none, because the leading `v` is
+  `x/mod`'s requirement and a heading is not a tag; and `[1.2.3+build.1]` named
+  none and now names one, because build metadata is valid Semantic Versioning.
+  Whether a version this project accepts is one it *wants* is a separate
+  question, asked under a name of its own. One departure is this project's and
+  not the specification's: a major, minor or patch component past 2^64-1 is
+  rejected, where the specification sets no bound.
+
+- **`golang.org/x/mod/semver` is gone**, and ordering is this project's too.
+  Sections 10 and 11 are where the specification stops being obvious: build
+  metadata is ignored for precedence, so `1.0.0+a` and `1.0.0+b` are one version
+  and two strings; a numeric pre-release identifier ranks below every identifier
+  that is not one; and numeric identifiers compare numerically with no upper
+  bound, which `1.0.0-99999999999999999999` needs and no fixed-width integer
+  gives. They carry no leading zero, so the longer of two is the larger and the
+  value is never read as a number.
+- **A tag is read by `ParseTag`, which is deliberately laxer than the
+  specification and says so.** A tag namespace carries a leading `v`, and the
+  GitHub Actions convention keeps a moving `v1` beside the `v1.0.0` it points
+  at; both name one version, and the fuller spelling still wins the tie for the
+  reference tag. That behaviour used to rest on `x/mod` accepting `vMAJOR`
+  shorthand as a side effect. It is now a named, tested contract of this
+  project's own, and read strictly it would have gone silently.
+- A tag now matches an entry by precedence rather than by string equality, so an
+  entry naming build metadata matches the tag naming its version. It could not
+  before, because canonicalisation dropped the metadata from one side only.
+
 ### Fixed
 
 - **The `release-branch` example cuts the version its changelog names, and
@@ -25,6 +71,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   requests would refuse the shape the strategy is built on. The cost is that the
   check judges the whole document, so the branch cannot report a stale candidate
   below the newest entry either.
+- Where the newest entry's heading names no version that can be read, `version`
+  and `notes` report nothing rather than describing the entry below it. That
+  entry was being read as the newest, so a workflow reading those cut a tag for
+  the wrong release and published the previous release's notes under it. Nothing
+  under such a heading is the newest entry, and reporting nothing is what a
+  document naming no version already does, so a workflow guarding on an empty
+  `version` lands on the path it already has. `already-tagged` and `prerelease`
+  answer `false` beside it, as they do for a document naming no version.
+- **A rejected heading names the rule it broke** rather than restating the
+  grammar. One message covered every rejection, so the author of
+  `## [1.3.0+build.1]` was told that a version states all three of major, minor
+  and patch, which it does. A leading zero, a component that is not a number, an
+  empty identifier, a character outside `[0-9A-Za-z-]` and a leading `v` now each
+  say so, and point at the fragment at fault.
 
 ## [1.1.0] - 2026-09-05
 

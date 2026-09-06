@@ -411,6 +411,69 @@ func TestOutputsDescribeAnUndatedNewestEntry(t *testing.T) {
 	}
 }
 
+// A heading whose version cannot be read names no version, so nothing under it
+// is the newest entry: every output answers as it does for a document naming no
+// version at all, rather than describing the entry below the heading, which a
+// consumer would tag and publish as the release the heading names.
+//
+// heading-form is switched off because that is the configuration in which
+// nothing else reports the heading, and the outputs answer the same either way.
+func TestOutputsDescribeNoEntryUnderAnUnreadableHeading(t *testing.T) {
+	path := write(t, "# Changelog\n\n## [9.9]\n\n### Added\n\n- the release being written\n\n"+
+		"## [9.8.0] - 2026-01-01\n\n### Added\n\n- the release before it\n")
+
+	sev, err := severities("", "", changelog.CheckHeadingForm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := emittedWith(t, path, repoState{}, sev)
+	want := map[string]string{
+		"valid":          "false",
+		"version":        "",
+		"notes":          "",
+		"already-tagged": "false",
+		"prerelease":     "false",
+	}
+	for name, value := range want {
+		if got[name] != value {
+			t.Errorf("%s is %q, want %q", name, got[name], value)
+		}
+	}
+}
+
+// A heading the newest entry sits above is reported like any other and reaches
+// no output: the newest entry is still the newest, so version and notes are
+// still its own.
+func TestAnUnreadableHeadingBelowTheNewestEntry(t *testing.T) {
+	path := write(t, "# Changelog\n\n## [1.2.0] - 2026-02-01\n\n### Added\n\n- a thing\n\n"+
+		"## [1.1]\n\n### Fixed\n\n- a bug\n\n"+
+		"## [1.0.0] - 2026-01-01\n\n### Added\n\n- the first thing\n")
+
+	var log bytes.Buffer
+	parsed, findings, err := run(path, changelog.Options{}, &log, &log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 || findings[0].Check != changelog.CheckUnreadableVersion {
+		t.Fatalf("findings %v, want exactly the %s one; log: %s",
+			findings, changelog.CheckUnreadableVersion, log.String())
+	}
+
+	got := map[string]string{}
+	for _, o := range outputs(parsed, nil, "", findings) {
+		got[o.Name] = o.Value
+	}
+	if got["version"] != "1.2.0" {
+		t.Errorf("version is %q, want 1.2.0", got["version"])
+	}
+	if got["notes"] != "### Added\n\n- a thing" {
+		t.Errorf("notes are %q", got["notes"])
+	}
+	if got["valid"] != "false" {
+		t.Errorf("valid is %q, want false", got["valid"])
+	}
+}
+
 // The notes are a body somebody else wrote, so an entry spelling out the
 // heredoc form is the case the delimiter has to survive.
 func TestACraftedEntryForgesNoOutput(t *testing.T) {
@@ -429,16 +492,23 @@ func TestACraftedEntryForgesNoOutput(t *testing.T) {
 	}
 }
 
-// emitted runs the validation and returns what a runner would read back out of
-// $GITHUB_OUTPUT.
+// emitted runs the validation under the register's defaults and returns what a
+// runner would read back out of $GITHUB_OUTPUT.
 func emitted(t *testing.T, path string, repo repoState) map[string]string {
+	t.Helper()
+	return emittedWith(t, path, repo, nil)
+}
+
+// emittedWith is emitted under a severity table of the caller's, which is what
+// a repository that has reconfigured a check runs.
+func emittedWith(t *testing.T, path string, repo repoState, sev changelog.Severities) map[string]string {
 	t.Helper()
 
 	collected := filepath.Join(t.TempDir(), "github-output")
 	t.Setenv("GITHUB_OUTPUT", collected)
 
 	var log bytes.Buffer
-	doc, findings, err := run(path, changelog.Options{Git: repo.Check}, &log, &log)
+	doc, findings, err := run(path, changelog.Options{Git: repo.Check, Severities: sev}, &log, &log)
 	if err != nil {
 		t.Fatal(err)
 	}

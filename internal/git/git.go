@@ -22,7 +22,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/go-git/go-git/v5/storage/filesystem"
-	"golang.org/x/mod/semver"
+	"github.com/mikluko/action-changelog/internal/semver"
 )
 
 // Tag is a tag reference and the object it names, which is a commit for a
@@ -34,17 +34,27 @@ type Tag struct {
 	Hash plumbing.Hash
 }
 
+// Semver is the version the tag names, and whether it names one at all.
+//
+// A tag namespace is laxer than the specification: it carries a leading "v",
+// and the moving "v1" a release workflow keeps reads as the version it points
+// at, which is what leaves it a candidate for the reference tag.
+func (t Tag) Semver() (semver.Version, bool) {
+	v, err := semver.ParseTag(t.Name)
+	return v, err == nil
+}
+
 // Version is the semver version the tag names, canonical and with its leading
 // "v", or empty for a tag naming no version.
 //
 // It is what two tags are compared by, so a repository tagging 1.2.3 is read
 // the same as one tagging v1.2.3.
 func (t Tag) Version() string {
-	v := canonical(t.Name)
-	if !semver.IsValid(v) {
+	v, ok := t.Semver()
+	if !ok {
 		return ""
 	}
-	return semver.Canonical(v)
+	return v.Canonical().Tag()
 }
 
 // Repo is a read-only handle on a local repository.
@@ -284,7 +294,8 @@ func (r *Repo) Reference(tags []Tag, admit Eligible) (Tag, bool, error) {
 func final(tags []Tag) []Tag {
 	out := make([]Tag, 0, len(tags))
 	for _, t := range tags {
-		if semver.Prerelease(t.Version()) == "" {
+		// Every tag here came from Versions, so it names one.
+		if v, ok := t.Semver(); ok && !v.Prerelease() {
 			out = append(out, t)
 		}
 	}
@@ -301,12 +312,14 @@ func final(tags []Tag) []Tag {
 func Versions(tags []Tag) []Tag {
 	out := make([]Tag, 0, len(tags))
 	for _, t := range tags {
-		if t.Version() != "" {
+		if _, ok := t.Semver(); ok {
 			out = append(out, t)
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
-		if c := semver.Compare(out[i].Version(), out[j].Version()); c != 0 {
+		a, _ := out[i].Semver()
+		b, _ := out[j].Semver()
+		if c := semver.Compare(a, b); c != 0 {
 			return c > 0
 		}
 		return components(out[i].Name) > components(out[j].Name)
@@ -326,19 +339,6 @@ func components(name string) int {
 		v = v[:i]
 	}
 	return strings.Count(v, ".") + 1
-}
-
-// canonical adds the "v" that golang.org/x/mod/semver requires, so a repository
-// tagging 1.2.3 is read the same as one tagging v1.2.3.
-func canonical(v string) string {
-	v = strings.TrimSpace(v)
-	if v == "" {
-		return ""
-	}
-	if v[0] != 'v' && v[0] != 'V' {
-		return "v" + v
-	}
-	return "v" + v[1:]
 }
 
 // discover searches dir and each of its parents for a repository, returning the

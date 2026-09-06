@@ -1,8 +1,11 @@
 package changelog
 
 import (
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/mikluko/action-changelog/internal/semver"
 )
 
 func TestParseHeadingForms(t *testing.T) {
@@ -12,22 +15,53 @@ func TestParseHeadingForms(t *testing.T) {
 		version    string
 		date       string
 		unreleased bool
+		rule       semver.Rule
 	}{
-		{"bracketed with date", "[1.2.3] - 2026-09-04", "v1.2.3", "2026-09-04", false},
-		{"bracketed no date", "[1.2.3]", "v1.2.3", "", false},
-		{"bare with date", "1.2.3 - 2026-09-04", "v1.2.3", "2026-09-04", false},
-		{"v prefix", "[v1.2.3] - 2026-09-04", "v1.2.3", "2026-09-04", false},
-		{"unreleased", "[Unreleased]", "", "", true},
-		{"unreleased bare", "Unreleased", "", "", true},
-		{"prerelease", "[1.2.3-rc.1] - 2026-09-04", "v1.2.3-rc.1", "2026-09-04", false},
-		{"not a version", "[Yanked] - 2026-09-04", "", "", false},
-		{"partial version", "[1.2] - 2026-09-04", "", "", false},
+		{name: "bracketed with date", in: "[1.2.3] - 2026-09-04", version: "v1.2.3", date: "2026-09-04"},
+		{name: "bracketed no date", in: "[1.2.3]", version: "v1.2.3"},
+		{name: "bare with date", in: "1.2.3 - 2026-09-04", version: "v1.2.3", date: "2026-09-04"},
+		{name: "unreleased", in: "[Unreleased]", unreleased: true},
+		{name: "unreleased bare", in: "Unreleased", unreleased: true},
+		{name: "prerelease", in: "[1.2.3-rc.1] - 2026-09-04", version: "v1.2.3-rc.1", date: "2026-09-04"},
+
+		// Build metadata is valid Semantic Versioning, so the heading names a
+		// version. Whether this repository wants one is oci-incompatible-version's
+		// to say, and not this parser's.
+		{name: "build metadata", in: "[1.2.3+build.1] - 2026-09-04", version: "v1.2.3+build.1", date: "2026-09-04"},
+
+		// The leading "v" belongs to a tag namespace, not to the specification,
+		// and a heading is not a tag.
+		{name: "v prefix", in: "[v1.2.3] - 2026-09-04", rule: semver.RuleVPrefix},
+
+		{name: "not a version", in: "[Yanked] - 2026-09-04", rule: semver.RuleCore},
+		{name: "not a number", in: "[1.2.x] - 2026-09-04", rule: semver.RuleNumeric},
+		{name: "partial version", in: "[1.2] - 2026-09-04", rule: semver.RuleCore},
+		{name: "leading zero", in: "[01.2.3] - 2026-09-04", rule: semver.RuleLeadingZero},
+		{name: "empty prerelease", in: "[1.2.3-] - 2026-09-04", rule: semver.RuleEmptyIdent},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			v, d, u := parseHeading(tc.in)
-			if v != tc.version || d != tc.date || u != tc.unreleased {
+			e := Entry{Raw: tc.in}
+			parseHeading(&e)
+			if e.Version != tc.version || e.Date != tc.date || e.Unreleased != tc.unreleased {
 				t.Errorf("parseHeading(%q) = (%q, %q, %v), want (%q, %q, %v)",
-					tc.in, v, d, u, tc.version, tc.date, tc.unreleased)
+					tc.in, e.Version, e.Date, e.Unreleased, tc.version, tc.date, tc.unreleased)
+			}
+			if tc.version != "" && e.Semver.Tag() != tc.version {
+				t.Errorf("parseHeading(%q).Semver = %q, want %q", tc.in, e.Semver.Tag(), tc.version)
+			}
+			err := e.VersionErr
+			if tc.rule == "" {
+				if err != nil {
+					t.Errorf("parseHeading(%q) = %v, want no error", tc.in, err)
+				}
+				return
+			}
+			var se *semver.SyntaxError
+			if !errors.As(err, &se) {
+				t.Fatalf("parseHeading(%q) = %v, want a *semver.SyntaxError", tc.in, err)
+			}
+			if se.Rule != tc.rule {
+				t.Errorf("parseHeading(%q) broke %s, want %s", tc.in, se.Rule, tc.rule)
 			}
 		})
 	}
@@ -175,6 +209,27 @@ func TestParseMatchesLinkReferenceDefinitionsToEntries(t *testing.T) {
 	}
 	if strings.Contains(entries[1].Body, "example.test") {
 		t.Errorf("1.0.0 body carries the definition: %q", entries[1].Body)
+	}
+}
+
+// The newest entry is the first one that is not Unreleased, whether or not its
+// heading names a version anything can read. Reading past an unreadable heading
+// makes the entry below it the newest, which is a release the document does not
+// name being handed to whatever consumes Latest.
+func TestLatestStopsAtAnUnreadableHeading(t *testing.T) {
+	src := []byte(strings.Join([]string{
+		"# Changelog", "",
+		"## [Unreleased]", "",
+		"## [9.9]", "", "### Added", "", "- a thing", "",
+		"## [9.8.0] - 2026-01-01", "", "### Fixed", "", "- a bug",
+	}, "\n"))
+
+	if e, ok := Parse(src).Latest(); ok {
+		t.Errorf("Latest() = (%q, true), want no entry", e.Version)
+	}
+	// The entry is still an entry, and the immutability checks still compare it.
+	if n := len(Parse(src).Released()); n != 1 {
+		t.Errorf("Released() = %d, want 1", n)
 	}
 }
 

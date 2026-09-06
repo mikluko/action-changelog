@@ -1,10 +1,11 @@
 package changelog
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
-	"golang.org/x/mod/semver"
+	"github.com/mikluko/action-changelog/internal/semver"
 )
 
 // Finding is one departure from the format, addressed to the line that carries
@@ -19,6 +20,21 @@ type Finding struct {
 
 func (f Finding) String() string {
 	return fmt.Sprintf("%d: %s: %s (%s)", f.Line, f.Severity, f.Msg, f.Check)
+}
+
+// versionReason says why an entry's heading states no version, in the words of
+// the rule it broke. It falls back to the general shape for an entry carrying
+// no error, which Parse does not produce and a caller building an Entry by hand
+// can.
+func versionReason(e Entry) string {
+	var se *semver.SyntaxError
+	if errors.As(e.VersionErr, &se) {
+		if se.Part == "" {
+			return se.Note
+		}
+		return fmt.Sprintf("%s (%q)", se.Note, se.Part)
+	}
+	return "a version states all three of major, minor and patch"
 }
 
 // DefaultSections is the vocabulary Keep a Changelog mandates, unchanged between
@@ -76,7 +92,7 @@ func (c *Changelog) Lint(opts Options) []Finding {
 	// can decide is reported as the first.
 	newestLine, newestTag := -1, ""
 	if latest, ok := c.Latest(); ok {
-		newestLine, newestTag = latest.Line, opts.Git.tag(latest.Version)
+		newestLine, newestTag = latest.Line, opts.Git.tag(latest)
 	}
 
 	var prev Entry
@@ -84,8 +100,8 @@ func (c *Changelog) Lint(opts Options) []Finding {
 		switch {
 		case e.Unreleased:
 		case e.Version == "":
-			f.add(CheckHeadingForm, e.Line,
-				"heading %q is neither [Unreleased] nor a version and date, as in [1.2.3] - 2006-01-02", e.Raw)
+			f.add(CheckUnreadableVersion, e.Line,
+				"heading %q is neither [Unreleased] nor a version and date, as in [1.2.3] - 2006-01-02: %s", e.Raw, versionReason(e))
 		default:
 			switch {
 			case e.Date == "" && e.Line == newestLine && newestTag != "":
@@ -102,7 +118,7 @@ func (c *Changelog) Lint(opts Options) []Finding {
 			case !isDate(e.Date):
 				f.add(CheckDateFormat, e.Line, "date %q is not YYYY-MM-DD", e.Date)
 			}
-			if prev.Version != "" && semver.Compare(e.Version, prev.Version) >= 0 {
+			if prev.Version != "" && semver.Compare(e.Semver, prev.Semver) >= 0 {
 				f.add(CheckVersionOrder, e.Line,
 					"version %s does not come before %s, which is above it; entries run newest first",
 					e.Version[1:], prev.Version[1:])
@@ -124,7 +140,7 @@ func (c *Changelog) Lint(opts Options) []Finding {
 					"version %s has no link reference definition, while others do; it renders as literal text",
 					e.Version[1:])
 			}
-			if semver.Prerelease(e.Version) != "" {
+			if e.Semver.Prerelease() {
 				f.add(CheckPrereleaseEntry, e.Line,
 					"version %s is a pre-release", e.Version[1:])
 			}

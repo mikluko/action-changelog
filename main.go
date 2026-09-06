@@ -17,8 +17,6 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"golang.org/x/mod/semver"
-
 	"github.com/mikluko/action-changelog/internal/changelog"
 	"github.com/mikluko/action-changelog/internal/git"
 	"github.com/mikluko/action-changelog/internal/output"
@@ -210,8 +208,8 @@ func outputs(doc *changelog.Changelog, tags []git.Tag, reference string, finding
 	var version, notes, want string
 	var prerelease bool
 	if latest, ok := doc.Latest(); ok {
-		version, notes, want = strings.TrimPrefix(latest.Version, "v"), latest.Body, semver.Canonical(latest.Version)
-		prerelease = semver.Prerelease(latest.Version) != ""
+		version, notes, want = latest.Semver.String(), latest.Body, latest.Semver.Canonical().Tag()
+		prerelease = latest.Semver.Prerelease()
 	}
 
 	return []output.Output{

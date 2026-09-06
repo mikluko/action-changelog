@@ -45,16 +45,17 @@ func ParseSeverity(s string) (Severity, error) {
 // The name of each check, as it is written in the register, in a finding, in
 // the GitHub Actions annotation, and in the flags that reconfigure it.
 const (
-	CheckHeadingForm     = "heading-form"
-	CheckDateFormat      = "date-format"
-	CheckVersionOrder    = "version-order"
-	CheckEmptyEntry      = "empty-entry"
-	CheckUnknownSection  = "unknown-section"
-	CheckDateOrder       = "date-order"
-	CheckDateFuture      = "date-future"
-	CheckPartialLinkRef  = "partial-link-refs"
-	CheckPrereleaseEntry = "prerelease-entry"
-	CheckUndatedEntry    = "undated-entry"
+	CheckUnreadableVersion = "unreadable-version"
+	CheckHeadingForm       = "heading-form"
+	CheckDateFormat        = "date-format"
+	CheckVersionOrder      = "version-order"
+	CheckEmptyEntry        = "empty-entry"
+	CheckUnknownSection    = "unknown-section"
+	CheckDateOrder         = "date-order"
+	CheckDateFuture        = "date-future"
+	CheckPartialLinkRef    = "partial-link-refs"
+	CheckPrereleaseEntry   = "prerelease-entry"
+	CheckUndatedEntry      = "undated-entry"
 
 	// These five read the repository rather than the document alone.
 	CheckUndatedRelease          = "undated-release"
@@ -87,8 +88,13 @@ type Check struct {
 // case that wants it.
 var Checks = []Check{
 	{
+		Name:        CheckUnreadableVersion,
+		Description: "An entry heading is [Unreleased] or names a Semantic Versioning 2.0.0 version, as in [1.2.3]: three components, no leading v. Where the newest one names none, nothing is the newest entry and version and notes report nothing.",
+		Default:     Error,
+	},
+	{
 		Name:        CheckHeadingForm,
-		Description: "An entry heading states a version and a date, as in [1.2.3] - 2006-01-02. The newest entry may omit the date, which undated-entry and undated-release answer for.",
+		Description: "An entry heading states a date beside its version, as in [1.2.3] - 2006-01-02. The newest entry may omit the date, which undated-entry and undated-release answer for.",
 		Default:     Error,
 	},
 	{

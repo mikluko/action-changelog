@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v3"
 
 	"github.com/mikluko/action-changelog/internal/changelog"
@@ -108,7 +107,7 @@ func TestDocumentedInvocationsNameTheCurrentMajor(t *testing.T) {
 	if !ok {
 		t.Fatal("CHANGELOG.md names no released version")
 	}
-	want := action + semver.Major(latest.Version)
+	want := action + latest.Semver.MajorTag()
 
 	var found int
 	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
