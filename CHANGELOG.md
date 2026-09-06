@@ -33,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   UTC** — a changelog date means the day the human cut the release, so
   normalising a tag cut at 23:30-07:00 turns a correct entry into a finding.
 
+  **The open entry is what makes this check exact.** Under `release-branch` the
+  date is written by the merge that cuts the tag, so it is a record. Under
+  `release-trunk` it is written in the pull request before the tag exists, so it
+  is a prediction, and a pull request open across midnight ships an entry that
+  disagrees with its own tag legitimately. That is the invocation that switches
+  this check off, the way a branch accumulating a release switches off
+  `undated-entry`.
+
 ### Changed
 
 - **What counts as a version is Semantic Versioning 2.0.0 exactly**, read by a
