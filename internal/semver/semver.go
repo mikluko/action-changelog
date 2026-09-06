@@ -228,3 +228,137 @@ func identChars(s string) bool {
 	}
 	return true
 }
+
+// Canonical is the version without its build metadata. Section 10 says build
+// metadata is ignored when determining precedence, so two versions differing
+// only there are one version wherever versions are compared or matched.
+func (v Version) Canonical() Version {
+	v.Build = nil
+	return v
+}
+
+// Tag writes the version as a tag name, with the leading "v" a repository's tag
+// namespace carries by convention and the specification's own grammar does not.
+func (v Version) Tag() string { return "v" + v.String() }
+
+// ParseTag reads a version tag, which is deliberately laxer than Parse.
+//
+// A tag namespace is not the specification's: it carries a leading "v", and the
+// GitHub Actions convention keeps a moving "v1" beside the "v1.0.0" it points
+// at, so a caller reading tags has to understand both. A component the tag omits
+// is zero, making "v1" and "v1.0.0" one version — which is what leaves a
+// repository's moving tag a candidate for the reference tag.
+//
+// Only the core is expanded. A pre-release or build part rides along and is read
+// exactly as Parse reads it, so "v1-rc.1" is the version 1.0.0-rc.1 and
+// "v1.2.3-01" is still a leading zero in a numeric identifier.
+func ParseTag(s string) (Version, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return Version{}, &SyntaxError{Input: s, Rule: RuleEmpty, Note: "it is empty"}
+	}
+	if s[0] == 'v' || s[0] == 'V' {
+		s = s[1:]
+	}
+	// Only the version core is expanded, so the shorthand cannot reach across a
+	// pre-release or build separator and invent components a tag never spelled.
+	core := s
+	if i := strings.IndexAny(s, "-+"); i >= 0 {
+		core = s[:i]
+	}
+	switch strings.Count(core, ".") {
+	case 0:
+		s = core + ".0.0" + s[len(core):]
+	case 1:
+		s = core + ".0" + s[len(core):]
+	}
+	return Parse(s)
+}
+
+// Compare orders two versions by the precedence rules of section 11, returning
+// -1, 0 or +1 as v sorts before, equal to, or after w.
+//
+// Build metadata is ignored, per section 10, so two versions differing only
+// there compare equal while remaining different strings.
+func Compare(v, w Version) int {
+	if c := cmpUint(v.Major, w.Major); c != 0 {
+		return c
+	}
+	if c := cmpUint(v.Minor, w.Minor); c != 0 {
+		return c
+	}
+	if c := cmpUint(v.Patch, w.Patch); c != 0 {
+		return c
+	}
+	return comparePre(v.Pre, w.Pre)
+}
+
+// comparePre orders two pre-release parts. A version with no pre-release part
+// outranks one that has any, which is section 9's rule that a pre-release
+// denotes something below the normal version.
+func comparePre(a, b []string) int {
+	switch {
+	case len(a) == 0 && len(b) == 0:
+		return 0
+	case len(a) == 0:
+		return 1
+	case len(b) == 0:
+		return -1
+	}
+	for i := 0; i < len(a) && i < len(b); i++ {
+		if c := compareIdent(a[i], b[i]); c != 0 {
+			return c
+		}
+	}
+	// Every identifier they share is equal, so the longer run wins: a larger
+	// set of pre-release fields outranks a smaller one.
+	return cmpInt(len(a), len(b))
+}
+
+// compareIdent orders two pre-release identifiers.
+//
+// Numeric identifiers compare numerically and rank below every identifier that
+// is not one. The numeric comparison is done on the text: a numeric identifier
+// carries no leading zero, so the longer of two is the larger, and equal
+// lengths order lexically. That holds at any width, which matters because the
+// specification sets no bound on one.
+func compareIdent(a, b string) int {
+	an, bn := allDigits(a), allDigits(b)
+	switch {
+	case an && bn:
+		if len(a) != len(b) {
+			return cmpInt(len(a), len(b))
+		}
+		return strings.Compare(a, b)
+	case an:
+		return -1
+	case bn:
+		return 1
+	default:
+		return strings.Compare(a, b)
+	}
+}
+
+func cmpUint(a, b uint64) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return 1
+	}
+	return 0
+}
+
+func cmpInt(a, b int) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return 1
+	}
+	return 0
+}
+
+// MajorTag is the moving tag a release workflow keeps for this version's major
+// line, as in "v1". It is the reference a documented invocation names.
+func (v Version) MajorTag() string { return "v" + strconv.FormatUint(v.Major, 10) }
