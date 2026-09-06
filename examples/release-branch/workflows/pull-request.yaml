@@ -1,15 +1,13 @@
 name: Changelog
 
-# The pull-request invocation. It relaxes undated-entry for a different reason
-# than the branch does: a pull request may target the stabilization branch, where
-# the newest entry is legitimately open, or the trunk, where it is not, and
-# nothing in the binary knows which. The two push invocations decide, once the
-# commit has landed somewhere.
+# The pull-request invocation. It relaxes undated-entry because a pull request
+# may target the stabilization branch, where the newest entry is legitimately
+# open, or the trunk, where it is not, and nothing in the binary knows which. The
+# two push invocations decide, once the commit has landed somewhere.
 #
-# prerelease-entry is raised here as it is on the other two, and that is where
-# release-trunk parts company: there a candidate can only be written as an entry,
-# so a release pull request may legitimately carry a pre-release heading while it
-# is under discussion. Under this strategy there is no such moment.
+# prerelease-entry is not raised for the same reason: a pull request into the
+# stabilization branch legitimately carries the candidate's heading, and the file
+# is the same file either way. The trunk invocation is where that is caught.
 on:
   pull_request:
 
@@ -28,7 +26,6 @@ jobs:
       - uses: mikluko/action-changelog@v1
         with:
           sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
-          error: prerelease-entry
           # Quoted because YAML 1.1 reads a bare off as false, and the input has
           # to survive whichever parser reads this file.
           "off": undated-entry

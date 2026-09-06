@@ -1,9 +1,10 @@
 # Changelog
 
-This copy of the example departs from the release-branch policy in three ways,
-one per check it provokes. It exists so the example is executed rather than
-described: a test runs both files under the configuration the three workflows
-carry and holds this one to the findings the README lists.
+This copy of the example departs from the release-branch policy in three ways.
+It exists so the example is executed rather than described: a test runs both
+files under the configuration the three workflows carry and holds this one to
+the findings the README lists, which differ per invocation because the policy
+does.
 
 ## [Unreleased]
 
@@ -27,8 +28,12 @@ carry and holds this one to the findings the README lists.
 
 ### Added
 
-- A pre-release entry, where this strategy keeps every pre-release version in a
-  tag the branch workflow composes and never in a heading.
+- A candidate left in the file as history. The newest entry may name one, which
+  is how this strategy cuts a candidate at all, but an old one below it was
+  never rewritten into the release it became. Only the trunk invocation reports
+  it: the branch switches prerelease-entry off, and the check is a judgement
+  about the whole document rather than about one entry, so switching it off to
+  permit the newest heading permits this one too.
 
 ## [1.0.0] - 2026-01-15
 

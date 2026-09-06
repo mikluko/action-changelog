@@ -5,14 +5,18 @@ name: Changelog
 # branch is still accumulating. undated-entry is the check that says an undated
 # newest entry is a defect, and switching it off on this branch and nowhere else
 # is most of what the strategy costs in configuration.
+#
+# prerelease-entry is not raised here, and that is the rest of it. A candidate
+# under this strategy is a version the entry names, so a pre-release heading is
+# this branch working as intended. The trunk still raises it.
 on:
   push:
     branches: ['release/*']
 
-# The action reports and writes nothing, so it needs no token beyond the one
-# the checkout uses. Whatever cuts the tag composed below needs more.
+# The action reports and writes nothing and needs no token beyond the checkout's.
+# The step below pushes a tag, which is what contents: write is for.
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   changelog:
@@ -27,10 +31,6 @@ jobs:
         id: changelog
         with:
           sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
-          # Raised on all three invocations of this strategy. The candidate this
-          # branch produces is the tag composed below and never a heading, so a
-          # pre-release entry is a mistake wherever in the document it appears.
-          error: prerelease-entry
           # Quoted because YAML 1.1 reads a bare off as false, and the input has
           # to survive whichever parser reads this file.
           #
@@ -40,28 +40,34 @@ jobs:
           # wants it as much as the trunk does.
           "off": undated-entry
           # The default, written down because this is the branch where raising it
-          # to all looks right and is not: the reference would become a pre tag
-          # cut on this branch, whose changelog already carries the open entry,
-          # so release-entry-modified would fire on every commit that rewrote it.
+          # to all looks right and is not: the reference would become a candidate
+          # tag cut here, whose changelog already carries the entry that named it,
+          # so release-entry-modified would fire the moment that entry is
+          # rewritten for the next candidate.
           reference-tags: final
 
-      # The action proposes no tag spelling, so the workflow composes one out of
-      # what it already knows: the version from the entry, the suffix from the
-      # branch it is running on, and the ordinal from its own run number.
-      # Whatever cuts tags in this repository reads this value.
+      # The tag is the version the entry names, with a v in front. Nothing is
+      # composed: writing 1.3.0-rc.2 in the heading is what cuts v1.3.0-rc.2, and
+      # a second candidate is that heading rewritten rather than this job run
+      # again.
       #
-      # already-tagged is false for the whole life of the branch, because the
-      # tags cut here name 1.3.0-pre.N and the entry names 1.3.0. It turns true
-      # once the final tag exists, which is how this step knows to stop.
+      # Two guards, and the trunk carries the same two with one word changed.
+      # This branch cuts what the entry names while that version is a
+      # pre-release; the trunk cuts it while it is final. Dropping the identifier
+      # is how a branch says the release is ready, so cutting it here would take
+      # the final tag off the trunk.
+      #
+      # A tag pushed with the default GITHUB_TOKEN triggers no workflow. A
+      # repository whose publish runs on the tag passes a token of its own here.
       #
       # The version reaches the script through the environment and never through
       # ${{ }} expansion: it comes from a file a contributor wrote.
-      - name: The pre-release tag for this run
-        id: pre
-        if: steps.changelog.outputs.already-tagged == 'false'
+      - name: Cut the candidate
+        if: >-
+          steps.changelog.outputs.prerelease == 'true' &&
+          steps.changelog.outputs.already-tagged == 'false'
         env:
           VERSION: ${{ steps.changelog.outputs.version }}
         run: |
-          suffix="${GITHUB_REF_NAME##*-}"
-          tag="v$VERSION-$suffix.$GITHUB_RUN_NUMBER"
-          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
