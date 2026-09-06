@@ -163,9 +163,10 @@ untagged, and the tag is cut. One branch, one ceremony.
 
 [`release-branch/`](examples/release-branch/) opens a release on a branch of its
 own. The entry names a version and carries no date while the branch accumulates,
-`undated-entry` is switched off there and nowhere else, every run on the branch
-composes a pre-release tag out of `version` and its own run number, and merging
-to the trunk dates the entry and cuts the final tag.
+`undated-entry` is switched off there and nowhere else, the version that entry
+names is the tag it cuts — candidate identifier and all, so writing `1.3.0-rc.2`
+in the heading is what cuts `v1.3.0-rc.2` — and merging to the trunk dates the
+entry and cuts the final tag.
 
 `go test ./...` validates both trees under the inputs their workflows carry, so
 the examples are executed rather than described.

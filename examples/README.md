@@ -13,13 +13,13 @@ product.
 
 | | [`release-trunk/`](release-trunk/) | [`release-branch/`](release-branch/) |
 |---|---|---|
-| Where a release is prepared | on the trunk | on `release/vX.Y-pre` |
+| Where a release is prepared | on the trunk | on a `release/*` branch |
 | The newest entry | names a version and a date | names a version and no date while the branch is open |
-| What a run hands downstream | the release, once the trunk finds the version untagged | `vX.Y.Z-pre.N`, composed on every run on the branch |
+| What a run hands downstream | the release, once the trunk finds the version untagged | the version the entry names, once the branch finds it untagged |
 | Workflow invocations | two | three |
 | `undated-entry` | at its default, `error` | switched off on the stabilization branch, and nowhere else |
 | `undated-release` | at its default, `error` | at its default, `error` |
-| `prerelease-entry` | raised on the trunk, left off on pull requests | raised on all three invocations |
+| `prerelease-entry` | raised on the trunk, left off on pull requests | raised on the trunk alone: a candidate is a heading here |
 
 **release-trunk** is for a repository whose releases are decided in one commit:
 the entry is written with its date, it merges, and the tag is cut. One branch,

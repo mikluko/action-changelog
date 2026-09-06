@@ -2,19 +2,20 @@ name: Changelog
 
 # The trunk invocation. The stabilization branch merges here, and that merge is
 # what dates the entry, so undated-entry is left at its default, which is error:
-# an entry that reaches the trunk still open fails. That is the one input this
-# file does not share with the other two.
+# an entry that reaches the trunk still open fails.
 #
-# prerelease-entry it does share: it is raised on all three invocations, because
-# under this strategy the X.Y.Z-pre.N spelling is a tag the branch workflow
-# composes and never a heading in the file, so a pre-release entry anywhere in
-# the document is a mistake and there is no branch where it is under discussion.
+# prerelease-entry is raised here and on neither of the other two. A candidate is
+# a version the entry names under this strategy, which is legitimate on the
+# branch and never on the trunk: a release that reaches the trunk still carrying
+# an identifier is one nobody finished.
 on:
   push:
     branches: [main]
 
+# The action reports and writes nothing and needs no token beyond the checkout's.
+# The step below pushes a tag, which is what contents: write is for.
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   changelog:
@@ -26,6 +27,20 @@ jobs:
           # checkout carries none: no-git-tags fires and names this line.
           fetch-depth: 0
       - uses: mikluko/action-changelog@v1
+        id: changelog
         with:
           sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
           error: prerelease-entry
+
+      # The stabilization branch's step with one word changed: final rather than
+      # pre-release. Both cut the version the entry names and neither composes
+      # one, which is the whole of the strategy in two guards.
+      - name: Cut the release
+        if: >-
+          steps.changelog.outputs.prerelease == 'false' &&
+          steps.changelog.outputs.already-tagged == 'false'
+        env:
+          VERSION: ${{ steps.changelog.outputs.version }}
+        run: |
+          git tag "v$VERSION"
+          git push origin "v$VERSION"

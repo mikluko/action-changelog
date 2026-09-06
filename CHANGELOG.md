@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The `release-branch` example cuts the version its changelog names, and
+  composes nothing.** It derived a pre-release tag from `github.run_number` and
+  from the branch name's last hyphenated segment, and both were wrong: the run
+  number counts a workflow file's runs and resets when the file is renamed, and
+  `${GITHUB_REF_NAME##*-}` returns the whole ref on a branch carrying no hyphen,
+  so `main` composed the legal and meaningless `v1.3.0-main.7`. Neither is
+  repaired, because composing at all contradicted this action's thesis that
+  everything downstream follows from the document. Writing `1.3.0-rc.2` in the
+  heading is what cuts `v1.3.0-rc.2`; the branch and trunk invocations are the
+  same two guards with `prerelease` inverted; and a push that changes no version
+  cuts nothing, where the run number cut a candidate on every push.
+- `prerelease-entry` moves to the trunk invocation alone. A candidate is a
+  heading under this strategy now, so raising it on the branch or on pull
+  requests would refuse the shape the strategy is built on. The cost is that the
+  check judges the whole document, so the branch cannot report a stale candidate
+  below the newest entry either.
+
 ## [1.1.0] - 2026-09-05
 
 ### Added

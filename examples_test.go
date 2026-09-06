@@ -183,7 +183,6 @@ func TestReleaseBranchWorkflowInputs(t *testing.T) {
 	}{
 		{branchStable, map[string]string{
 			"sections":       exampleSections,
-			"error":          changelog.CheckPrereleaseEntry,
 			"off":            changelog.CheckUndatedEntry,
 			"reference-tags": "final",
 		}},
@@ -193,7 +192,6 @@ func TestReleaseBranchWorkflowInputs(t *testing.T) {
 		}},
 		{branchRequest, map[string]string{
 			"sections": exampleSections,
-			"error":    changelog.CheckPrereleaseEntry,
 			"off":      changelog.CheckUndatedEntry,
 		}},
 	} {
@@ -225,14 +223,16 @@ func TestReleaseBranchKeepsUndatedReleaseOn(t *testing.T) {
 }
 
 // One document under the three invocations is the whole strategy: the open entry
-// passes where the branch says it is open and is refused where the trunk says it
-// is not. The refusal is not a defect in the example. That file never reaches
-// the trunk in that state, because the merge dates the entry first.
+// names a candidate and passes where the branch says both are legitimate, and is
+// refused twice over on the trunk, once for the missing date and once for the
+// identifier. Neither refusal is a defect in the example. That file never reaches
+// the trunk in that state, because the branch drops the identifier and the merge
+// dates the entry.
 func TestReleaseBranchOpenEntry(t *testing.T) {
 	forEachInvocation(t, branchGood, []exampleCase{
 		{branchStable, nil},
 		{branchRequest, nil},
-		{branchMain, []string{changelog.CheckUndatedEntry}},
+		{branchMain, []string{changelog.CheckUndatedEntry, changelog.CheckPrereleaseEntry}},
 	})
 }
 
@@ -244,12 +244,10 @@ func TestReleaseBranchBrokenChangelogFailsWithTheFindingsItClaims(t *testing.T) 
 		{branchStable, []string{
 			changelog.CheckPartialLinkRef,
 			changelog.CheckHeadingForm,
-			changelog.CheckPrereleaseEntry,
 		}},
 		{branchRequest, []string{
 			changelog.CheckPartialLinkRef,
 			changelog.CheckHeadingForm,
-			changelog.CheckPrereleaseEntry,
 		}},
 		{branchMain, []string{
 			changelog.CheckUndatedEntry,

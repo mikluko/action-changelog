@@ -8,7 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [1.3.0]
+## [1.3.0-rc.1]
 
 ### Added
 
@@ -30,7 +30,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Defaults are resolved once at startup instead of per request.
 
-[unreleased]: https://git.example.invalid/repository/compare/v1.3.0...HEAD
-[1.3.0]: https://git.example.invalid/repository/compare/v1.2.0...v1.3.0
+[unreleased]: https://git.example.invalid/repository/compare/v1.3.0-rc.1...HEAD
+[1.3.0-rc.1]: https://git.example.invalid/repository/compare/v1.2.0...v1.3.0-rc.1
 [1.2.0]: https://git.example.invalid/repository/compare/v1.1.0...v1.2.0
 [1.1.0]: https://git.example.invalid/repository/releases/tag/v1.1.0
