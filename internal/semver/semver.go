@@ -362,3 +362,21 @@ func cmpInt(a, b int) int {
 // MajorTag is the moving tag a release workflow keeps for this version's major
 // line, as in "v1". It is the reference a documented invocation names.
 func (v Version) MajorTag() string { return "v" + strconv.FormatUint(v.Major, 10) }
+
+// TagComponents counts the numeric components a tag's name spells, so "v1"
+// answers 1 and "v1.0.0" answers 3.
+//
+// It is how two tags naming one version are told apart. A repository following
+// the GitHub Actions convention keeps a moving "v1" beside the "v1.0.0" it
+// points at, and ParseTag reads both as the same version; the release was cut
+// at the fuller spelling, and the shorter is a pointer that moves to the next
+// one. It reads the name rather than the version, because parsing makes them
+// identical, which is exactly what leaves them indistinguishable without this.
+func TagComponents(name string) int {
+	name = strings.TrimSpace(name)
+	name = strings.TrimPrefix(strings.TrimPrefix(name, "v"), "V")
+	if i := strings.IndexAny(name, "-+"); i >= 0 {
+		name = name[:i]
+	}
+	return strings.Count(name, ".") + 1
+}
