@@ -305,3 +305,52 @@ func TestLintUnreadableVersionIsSeparateFromHeadingForm(t *testing.T) {
 		t.Errorf("findings %v with heading-form off, want the %s one", off, CheckUnreadableVersion)
 	}
 }
+
+// The finding names the rule the heading broke rather than restating the
+// grammar. A single message covering every rejection told the author of
+// "1.3.0+build.1" that a version states all three of major, minor and patch,
+// which it does.
+func TestLintUnreadableVersionNamesTheRule(t *testing.T) {
+	for _, tc := range []struct{ heading, want string }{
+		{"[9.9]", "three components"},
+		{"[01.2.3]", "leading zero"},
+		{"[v1.2.3]", `leading "v"`},
+		{"[1.2.x]", "patch is not a number"},
+		{"[1.2.3-alpha_1]", "outside [0-9A-Za-z-]"},
+		{"[1.2.3-]", "identifier 1 is empty"},
+	} {
+		t.Run(tc.heading, func(t *testing.T) {
+			got := lint(t, nil,
+				"# Changelog", "",
+				"## [Unreleased]", "",
+				"## "+tc.heading, "", "### Added", "", "- a thing", "",
+				"## [9.8.0] - 2026-01-01", "", "### Fixed", "", "- a bug",
+			)
+			if len(got) != 1 || got[0].Check != CheckUnreadableVersion {
+				t.Fatalf("findings %v, want exactly the %s one", got, CheckUnreadableVersion)
+			}
+			if !strings.Contains(got[0].Msg, tc.want) {
+				t.Errorf("finding %q does not say %q", got[0].Msg, tc.want)
+			}
+		})
+	}
+}
+
+// Build metadata is valid Semantic Versioning, so the heading is readable and
+// this check is silent on it. Whether the version is one this repository wants
+// is a separate question, asked under a name of its own.
+func TestLintBuildMetadataIsAReadableVersion(t *testing.T) {
+	got := lint(t, nil,
+		"# Changelog", "",
+		"## [Unreleased]", "",
+		"## [1.2.3+build.1] - 2026-01-01", "", "### Added", "", "- a thing",
+	)
+	for _, f := range got {
+		if f.Check == CheckUnreadableVersion {
+			t.Errorf("finding %v: build metadata is a version the specification accepts", f)
+		}
+	}
+	if len(got) != 0 {
+		t.Errorf("findings %v, want none", got)
+	}
+}

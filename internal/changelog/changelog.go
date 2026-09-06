@@ -13,7 +13,8 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
-	"golang.org/x/mod/semver"
+
+	"github.com/mikluko/action-changelog/internal/semver"
 )
 
 // Section is a level-3 heading under an entry, such as "Added".
@@ -39,6 +40,11 @@ type Entry struct {
 	// this entry's bracketed heading token, which is what decides whether the
 	// heading renders as a live link or as literal "[1.2.3]" text.
 	LinkRef bool
+	// VersionErr is why the heading states no version, for an entry that is
+	// neither Unreleased nor versioned. It is a *semver.SyntaxError naming the
+	// rule the heading broke, so a finding can report that rule rather than
+	// restating the grammar, and it is nil for every other entry.
+	VersionErr error
 }
 
 // Changelog is a parsed document. Entries keep document order, so the first
@@ -124,7 +130,7 @@ func Parse(src []byte) *Changelog {
 			Raw:  headingText(src, h),
 			Line: lineOf(src, headingStart(src, h)),
 		}
-		e.Version, e.Date, e.Unreleased = parseHeading(e.Raw)
+		e.Version, e.Date, e.Unreleased, e.VersionErr = parseHeading(e.Raw)
 		e.Sections, e.Body = collect(src, h, next)
 		if label, bracketed := headingLabel(e.Raw); bracketed {
 			e.LinkRef = defined[strings.ToLower(label)]
@@ -295,16 +301,20 @@ func lineOf(src []byte, off int) int {
 
 // parseHeading reads an entry heading of the form "[1.2.3] - 2026-09-04" or
 // "[Unreleased]". Brackets are optional, and so is the date.
-func parseHeading(raw string) (version, date string, unreleased bool) {
+//
+// The version token is read as Semantic Versioning 2.0.0 with no shorthand and
+// no leading "v", so a heading naming "1.2" or "v1.2.3" states no version. The
+// error says which rule it broke.
+func parseHeading(raw string) (version, date string, unreleased bool, err error) {
 	name, rest := splitHeading(raw)
 	if strings.EqualFold(name, "unreleased") {
-		return "", strings.TrimSpace(rest), true
+		return "", strings.TrimSpace(rest), true, nil
 	}
-	v := canonical(name)
-	if !semver.IsValid(v) || semver.Canonical(v) != v {
-		return "", "", false
+	v, err := semver.Parse(name)
+	if err != nil {
+		return "", "", false, err
 	}
-	return v, strings.TrimSpace(rest), false
+	return "v" + v.String(), strings.TrimSpace(rest), false, nil
 }
 
 // splitHeading separates the version token from whatever follows it: the text

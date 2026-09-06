@@ -18,6 +18,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   described from the wrong entry. It is the split `undated-entry` and
   `undated-release` made, for the same reason. Sixteen checks.
 
+### Changed
+
+- **What counts as a version is Semantic Versioning 2.0.0 exactly**, read by a
+  parser written here rather than by `golang.org/x/mod/semver`, whose own package
+  doc declares two deviations from the specification: it requires a leading `v`,
+  and it recognises `vMAJOR` and `vMAJOR.MINOR` as alternatives to the
+  three-component form. Working around those cost a canonicalisation comparison
+  that carried a second policy nobody chose. Two headings change verdict:
+  `[v1.2.3]` named a version and now names none, because the leading `v` is
+  `x/mod`'s requirement and a heading is not a tag; and `[1.2.3+build.1]` named
+  none and now names one, because build metadata is valid Semantic Versioning.
+  Whether a version this project accepts is one it *wants* is a separate
+  question, asked under a name of its own. One departure is this project's and
+  not the specification's: a major, minor or patch component past 2^64-1 is
+  rejected, where the specification sets no bound.
+
 ### Fixed
 
 - **The `release-branch` example cuts the version its changelog names, and
@@ -44,6 +60,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   document naming no version already does, so a workflow guarding on an empty
   `version` lands on the path it already has. `already-tagged` and `prerelease`
   answer `false` beside it, as they do for a document naming no version.
+- **A rejected heading names the rule it broke** rather than restating the
+  grammar. One message covered every rejection, so the author of
+  `## [1.3.0+build.1]` was told that a version states all three of major, minor
+  and patch, which it does. A leading zero, a component that is not a number, an
+  empty identifier, a character outside `[0-9A-Za-z-]` and a leading `v` now each
+  say so, and point at the fragment at fault.
 
 ## [1.1.0] - 2026-09-05
 

@@ -89,7 +89,7 @@ type Check struct {
 var Checks = []Check{
 	{
 		Name:        CheckUnreadableVersion,
-		Description: "An entry heading is [Unreleased] or names a version that can be read, as in [1.2.3]. Where the newest one names none, nothing is the newest entry and version and notes report nothing.",
+		Description: "An entry heading is [Unreleased] or names a Semantic Versioning 2.0.0 version, as in [1.2.3]: three components, no leading v. Where the newest one names none, nothing is the newest entry and version and notes report nothing.",
 		Default:     Error,
 	},
 	{
