@@ -162,6 +162,12 @@ func (c *Changelog) Lint(opts Options) []Finding {
 				f.add(CheckPrereleaseEntry, e.Line,
 					"version %s is a pre-release", e.Version[1:])
 			}
+			// A fact about the version rather than about the document: it is
+			// valid Semantic Versioning and the registry grammar is narrower.
+			if reason := ociTagReason(e.Semver.String()); reason != "" {
+				f.add(CheckOCIIncompatible, e.Line,
+					"version %s cannot be an OCI tag: %s", e.Version[1:], reason)
+			}
 			prev = e
 		}
 		for _, s := range e.Sections {
