@@ -35,9 +35,10 @@ jobs:
           # to survive whichever parser reads this file.
           #
           # undated-release is deliberately not beside it. That one fires where
-          # the newest entry carries no date and a tag already names its version,
-          # which is a release that shipped and nobody dated, and this branch
-          # wants it as much as the trunk does.
+          # the newest entry carries no date and a *final* tag already names its
+          # version, which is a release that shipped and nobody dated, and this
+          # branch wants it as much as the trunk does. The candidate tags cut
+          # here name candidates, so they never trip it.
           "off": undated-entry
           # The default, written down because this is the branch where raising it
           # to all looks right and is not: the reference would become a candidate

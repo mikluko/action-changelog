@@ -51,8 +51,9 @@ An open entry is illegal under Keep a Changelog, which is why `undated-entry`
 defaults to `error`; switching it off is how one branch says its newest entry is
 open rather than malformed. Two things do not move with it. **`undated-release`
 stays at `error` everywhere**: it fires where the newest entry carries no date
-*and a tag already names its version*, which is a release that shipped and nobody
-dated. And **`heading-form` keeps erroring on any other undated entry**, the
+*and a final tag already names its version*, which is a release that shipped and
+nobody dated. A candidate tag naming the candidate this branch is accumulating is
+not that, and does not fire it. And **`heading-form` keeps erroring on any other undated entry**, the
 relaxation being scoped to the newest one.
 
 An open entry carries its link reference definition in released form from the

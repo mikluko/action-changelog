@@ -146,8 +146,8 @@ annotation, and which is what `error`, `warn` and `off` take.
 | `date-future` | `error` | No entry is dated later than today. |
 | `partial-link-refs` | `error` | Every versioned entry has a link reference definition, once any entry does. |
 | `prerelease-entry` | `off` | Policy: no entry names a pre-release version. Off by default; pre-release headings are legal. |
-| `undated-entry` | `error` | Policy: the newest entry states a date, where no tag yet names its version. Switched off, that entry is open: a release still accumulating on a branch of its own. |
-| `undated-release` | `error` | The newest entry states a date, where a tag already names its version. The release shipped and nobody dated it. |
+| `undated-entry` | `error` | Policy: the newest entry states a date, where no final tag yet names its version. Switched off, that entry is open: a release still accumulating on a branch of its own, whether or not a candidate has been cut from it. |
+| `undated-release` | `error` | The newest entry states a date, where a final tag already names its version. The release shipped and nobody dated it. A candidate tag is not one: it ships undated, which is what a stabilization branch is for. |
 | `no-git-tags` | `error` | The repository's tag history can be read, which every check comparing against it needs. |
 | `version-behind-tag` | `error` | The newest entry is not behind the reference tag. |
 | `release-entry-modified` | `error` | A released entry is unchanged since the reference tag. |

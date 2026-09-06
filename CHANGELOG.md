@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`undated-release` no longer fires where the tag naming the newest entry is a
+  candidate.** The check split on whether *a* tag already named the entry's
+  version, read as *the release shipped*. That reading is sound for a final and
+  false for a pre-release: a candidate ships its tag and stays undated on
+  purpose, which is what a stabilization branch is for. It fires on a **final**
+  tag now, and a candidate falls through to `undated-entry`, which is the check
+  such a branch already switches off.
+- The defect was unreachable until the `release-branch` example stopped
+  composing its tag. While the branch cut `vX.Y.Z-pre.<run>` and the entry named
+  `X.Y.Z`, no tag a branch cut ever named its own entry's version. Once the
+  entry names what is cut, the tag names the entry's version from the first
+  candidate on, and every push after it was a finding on the one branch whose
+  purpose is to cut them.
+
 ### Added
 
 - **`unreadable-version`, a check of its own for an entry heading naming no
