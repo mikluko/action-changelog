@@ -449,3 +449,89 @@ func names(tags []git.Tag) []string {
 	}
 	return out
 }
+
+// runAt runs git with the author and committer clocks pinned to when, which is
+// what lets a fixture cut a tag at a known instant in a known zone.
+func runAt(t *testing.T, dir, when string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"GIT_CONFIG_GLOBAL="+os.DevNull,
+		"GIT_CONFIG_SYSTEM="+os.DevNull,
+		"GIT_CONFIG_NOSYSTEM=1",
+		"GIT_AUTHOR_DATE="+when,
+		"GIT_COMMITTER_DATE="+when,
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+func day(t *testing.T, r *git.Repo, tags []git.Tag, name string) string {
+	t.Helper()
+	for _, tag := range tags {
+		if tag.Name == name {
+			d, err := r.TagDay(tag)
+			if err != nil {
+				t.Fatalf("TagDay(%s): %v", name, err)
+			}
+			return d
+		}
+	}
+	t.Fatalf("no tag %s in %v", name, tags)
+	return ""
+}
+
+// The two tag kinds carry their date in different places and a repository uses
+// one or the other, so reading only one is wrong on half the repositories in
+// reach. An annotated tag has a tagger date of its own; a lightweight tag is a
+// bare reference whose only date is on the commit it names.
+func TestTagDayReadsBothTagKinds(t *testing.T) {
+	dir := repo(t)
+	write(t, dir, "f", "one")
+	run(t, dir, "add", "f")
+	runAt(t, dir, "2026-01-01T12:00:00+00:00", "commit", "-m", "one")
+	run(t, dir, "tag", "v0.1.0")
+
+	write(t, dir, "f", "two")
+	run(t, dir, "add", "f")
+	runAt(t, dir, "2026-02-01T12:00:00+00:00", "commit", "-m", "two")
+	// Cut a month after the commit it points at, which is what tells the two
+	// dates apart: reading the commit here would answer 2026-02-01.
+	runAt(t, dir, "2026-03-01T12:00:00+00:00", "tag", "-a", "v0.2.0", "-m", "v0.2.0")
+
+	r, tags := open(t, dir)
+	if got := day(t, r, tags, "v0.1.0"); got != "2026-01-01" {
+		t.Errorf("lightweight v0.1.0 was cut on %q, want 2026-01-01", got)
+	}
+	if got := day(t, r, tags, "v0.2.0"); got != "2026-03-01" {
+		t.Errorf("annotated v0.2.0 was cut on %q, want 2026-03-01", got)
+	}
+}
+
+// The day is the tag's own, not UTC. A changelog date is a bare calendar day
+// meaning the day the human cut the release, and normalising these two to UTC
+// moves each onto the wrong side of a midnight.
+func TestTagDayIsInTheTagsOwnZone(t *testing.T) {
+	dir := repo(t)
+	write(t, dir, "f", "late")
+	run(t, dir, "add", "f")
+	// 2026-03-01 23:30 -07:00 is 2026-03-02 06:30 UTC.
+	runAt(t, dir, "2026-03-01T23:30:00-07:00", "commit", "-m", "late")
+	run(t, dir, "tag", "v1.0.0")
+
+	write(t, dir, "f", "early")
+	run(t, dir, "add", "f")
+	// 2026-03-02 00:30 +09:00 is 2026-03-01 15:30 UTC.
+	runAt(t, dir, "2026-03-02T00:30:00+09:00", "commit", "-m", "early")
+	runAt(t, dir, "2026-03-02T00:30:00+09:00", "tag", "-a", "v1.1.0", "-m", "v1.1.0")
+
+	r, tags := open(t, dir)
+	if got := day(t, r, tags, "v1.0.0"); got != "2026-03-01" {
+		t.Errorf("v1.0.0 was cut on %q, want 2026-03-01; UTC would say 2026-03-02", got)
+	}
+	if got := day(t, r, tags, "v1.1.0"); got != "2026-03-02" {
+		t.Errorf("v1.1.0 was cut on %q, want 2026-03-02; UTC would say 2026-03-01", got)
+	}
+}

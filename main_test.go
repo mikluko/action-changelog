@@ -141,7 +141,9 @@ func TestRewritingAReleasedEntryTurnsTheBuildRed(t *testing.T) {
 	}
 	gitcmd(t, dir, "add", "CHANGELOG.md")
 	gitcmd(t, dir, "commit", "-m", "1.0.0")
-	gitcmd(t, dir, "tag", "-a", "v1.0.0", "-m", "v1.0.0")
+	// An annotated tag carries a tagger date of its own, so this is the one
+	// pinned rather than the commit: it is cut on the day the entry names.
+	gitcmdAt(t, dir, "2026-01-01", "tag", "-a", "v1.0.0", "-m", "v1.0.0")
 
 	var log bytes.Buffer
 	_, findings, err := run(path, changelog.Options{Git: state(path, git.Final).Check}, &log, &log)
@@ -183,7 +185,9 @@ func TestAnUndatedEntryIsReadAgainstTheRepositorysTags(t *testing.T) {
 		t.Fatal(err)
 	}
 	gitcmd(t, dir, "add", "CHANGELOG.md")
-	gitcmd(t, dir, "commit", "-m", "1.0.0")
+	// On the day the 1.0.0 entry names, so date-mismatch stays out of a test
+	// about the undated pair.
+	gitcmdAt(t, dir, "2026-01-01", "commit", "-m", "1.0.0")
 	gitcmd(t, dir, "tag", "v1.0.0")
 
 	fired := func() string {
@@ -221,7 +225,7 @@ func TestAReleaseCandidateIsNoBaselineUnderTheDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	gitcmd(t, dir, "add", "CHANGELOG.md")
-	gitcmd(t, dir, "commit", "-m", "2.1.0")
+	gitcmdAt(t, dir, "2026-02-01", "commit", "-m", "2.1.0")
 	gitcmd(t, dir, "tag", "v2.1.0")
 
 	// The candidate rides on a later commit, so it is reachable and higher than
@@ -316,6 +320,17 @@ func fixture(t *testing.T) string {
 
 func gitcmd(t *testing.T, dir string, args ...string) {
 	t.Helper()
+	gitcmdAt(t, dir, "", args...)
+}
+
+// gitcmdAt runs git with the author and committer clocks pinned to noon on day,
+// which is what lets a fixture cut a tag on the day its document names. An
+// empty day leaves the clock alone.
+//
+// A lightweight tag has no date of its own, so pinning the commit is what dates
+// it; an annotated tag takes the same variable for its tagger.
+func gitcmdAt(t *testing.T, dir, day string, args ...string) {
+	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
@@ -323,6 +338,10 @@ func gitcmd(t *testing.T, dir string, args ...string) {
 		"GIT_CONFIG_SYSTEM="+os.DevNull,
 		"GIT_CONFIG_NOSYSTEM=1",
 	)
+	if day != "" {
+		when := day + "T12:00:00+00:00"
+		cmd.Env = append(cmd.Env, "GIT_AUTHOR_DATE="+when, "GIT_COMMITTER_DATE="+when)
+	}
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
@@ -341,7 +360,9 @@ func TestOutputsDescribeTheNewestEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	gitcmd(t, dir, "add", "CHANGELOG.md")
-	gitcmd(t, dir, "commit", "-m", "1.0.0")
+	// Committed on the day the 1.0.0 entry names, so the lightweight tag below
+	// carries that day and date-mismatch has nothing to say.
+	gitcmdAt(t, dir, "2026-01-01", "commit", "-m", "1.0.0")
 	// Tagged without the "v" that the outputs report, which is what holds the
 	// comparison to the version a tag names rather than to its text.
 	gitcmd(t, dir, "tag", "1.0.0")
@@ -569,5 +590,43 @@ func TestListChecksPrintsTheRegister(t *testing.T) {
 		if !strings.Contains(out.String(), c.Description) {
 			t.Errorf("--list-checks omits the description of %q", c.Name)
 		}
+	}
+}
+
+// date-mismatch reads git rather than the document, so it is wired end to end
+// against a repository: the entry claims a day, the tag carries another, and
+// the build goes red.
+func TestADateThatDisagreesWithItsTagTurnsTheBuildRed(t *testing.T) {
+	const doc = "# Changelog\n\n## [1.0.0] - 2026-01-01\n\n### Added\n\n- a thing\n"
+
+	dir := fixture(t)
+	path := filepath.Join(dir, "CHANGELOG.md")
+	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitcmd(t, dir, "add", "CHANGELOG.md")
+	// Cut nine days after the day the entry names.
+	gitcmdAt(t, dir, "2026-01-10", "commit", "-m", "1.0.0")
+	gitcmd(t, dir, "tag", "v1.0.0")
+
+	var log bytes.Buffer
+	_, findings, err := run(path, changelog.Options{Git: state(path, git.Final).Check}, &log, &log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !red(findings, changelog.Error) {
+		t.Fatalf("a date disagreeing with its tag did not turn the build red; log: %s", log.String())
+	}
+	var found bool
+	for _, f := range findings {
+		if f.Check == changelog.CheckDateMismatch {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("findings %v, want one from %s", findings, changelog.CheckDateMismatch)
+	}
+	if !strings.Contains(log.String(), "2026-01-10") {
+		t.Errorf("the log does not name the day the tag was cut: %s", log.String())
 	}
 }

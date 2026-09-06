@@ -354,3 +354,190 @@ func TestLintBuildMetadataIsAReadableVersion(t *testing.T) {
 		t.Errorf("findings %v, want none", got)
 	}
 }
+
+// lintGit runs a document against a repository state, which is what the checks
+// reading tags need.
+func lintGit(t *testing.T, g *Git, lines ...string) []Finding {
+	t.Helper()
+	return Parse([]byte(strings.Join(lines, "\n"))).Lint(Options{Git: g})
+}
+
+// A released entry's date is a claim about the day its release was cut, and
+// nothing else in the register checks it: date-format reads the shape, and
+// date-order and date-future read the document alone.
+func TestLintDateMismatch(t *testing.T) {
+	doc := []string{
+		"# Changelog", "",
+		"## [1.1.0] - 2026-02-02", "", "### Added", "", "- a thing", "",
+		"## [1.0.0] - 2026-01-01", "", "### Added", "", "- the first thing",
+	}
+
+	for _, tc := range []struct {
+		name  string
+		git   *Git
+		want  []string
+		lines []int
+	}{
+		{
+			name: "every tagged entry agrees",
+			git: &Git{
+				Tags:    []string{"v1.1.0", "v1.0.0"},
+				TagDays: map[string]string{"v1.1.0": "2026-02-02", "v1.0.0": "2026-01-01"},
+			},
+		},
+		{
+			name: "the newest entry disagrees",
+			git: &Git{
+				Tags:    []string{"v1.1.0", "v1.0.0"},
+				TagDays: map[string]string{"v1.1.0": "2026-02-03", "v1.0.0": "2026-01-01"},
+			},
+			want:  []string{CheckDateMismatch},
+			lines: []int{3},
+		},
+		{
+			// An entry below the newest is history, and a date that disagrees
+			// there is history somebody rewrote.
+			name: "an older entry disagrees",
+			git: &Git{
+				Tags:    []string{"v1.1.0", "v1.0.0"},
+				TagDays: map[string]string{"v1.1.0": "2026-02-02", "v1.0.0": "2026-01-09"},
+			},
+			want:  []string{CheckDateMismatch},
+			lines: []int{9},
+		},
+		{
+			name: "both disagree",
+			git: &Git{
+				Tags:    []string{"v1.1.0", "v1.0.0"},
+				TagDays: map[string]string{"v1.1.0": "2026-02-03", "v1.0.0": "2026-01-09"},
+			},
+			want:  []string{CheckDateMismatch, CheckDateMismatch},
+			lines: []int{3, 9},
+		},
+		{
+			// No tag names 1.1.0, so its date is a release pending rather than
+			// a date that disagrees. That is B1713's subject, not this check's.
+			name: "the newest entry is untagged",
+			git: &Git{
+				Tags:    []string{"v1.0.0"},
+				TagDays: map[string]string{"v1.0.0": "2026-01-01"},
+			},
+		},
+		{
+			// A tag whose day could not be read is nothing to compare against.
+			name: "the tag's day is unknown",
+			git: &Git{
+				Tags:    []string{"v1.1.0", "v1.0.0"},
+				TagDays: map[string]string{"v1.0.0": "2026-01-01"},
+			},
+		},
+		{
+			// A repository that could not be read is no-git-tags' to report.
+			name:  "the history could not be read",
+			git:   &Git{Err: errUnreadable},
+			want:  []string{CheckNoGitTags},
+			lines: []int{0},
+		},
+		{
+			name: "no repository was offered",
+			git:  nil,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := lintGit(t, tc.git, doc...)
+			if len(got) != len(tc.want) {
+				t.Fatalf("findings %v, want %v", got, tc.want)
+			}
+			for i := range got {
+				if got[i].Check != tc.want[i] {
+					t.Errorf("finding %d is %s, want %s", i, got[i].Check, tc.want[i])
+				}
+				if got[i].Line != tc.lines[i] {
+					t.Errorf("finding %d is at line %d, want %d", i, got[i].Line, tc.lines[i])
+				}
+			}
+		})
+	}
+}
+
+// The message names both dates and the tag, because the reader has to decide
+// which of the two is wrong and cannot do that from either alone.
+func TestLintDateMismatchNamesBothDates(t *testing.T) {
+	got := lintGit(t, &Git{
+		Tags:    []string{"v1.0.0"},
+		TagDays: map[string]string{"v1.0.0": "2026-01-09"},
+	},
+		"# Changelog", "",
+		"## [1.0.0] - 2026-01-01", "", "### Added", "", "- a thing",
+	)
+	if len(got) != 1 {
+		t.Fatalf("findings %v, want exactly one", got)
+	}
+	for _, want := range []string{"1.0.0", "2026-01-01", "v1.0.0", "2026-01-09"} {
+		if !strings.Contains(got[0].Msg, want) {
+			t.Errorf("finding %q does not name %q", got[0].Msg, want)
+		}
+	}
+}
+
+// A tag matches the version it names rather than the text it is written in, so
+// a repository tagging 1.0.0 is read the same as one tagging v1.0.0.
+func TestLintDateMismatchMatchesTheVersionNotTheSpelling(t *testing.T) {
+	for _, tag := range []string{"v1.0.0", "1.0.0", "V1.0.0"} {
+		t.Run(tag, func(t *testing.T) {
+			got := lintGit(t, &Git{
+				Tags:    []string{tag},
+				TagDays: map[string]string{tag: "2026-01-09"},
+			},
+				"# Changelog", "",
+				"## [1.0.0] - 2026-01-01", "", "### Added", "", "- a thing",
+			)
+			if len(got) != 1 || got[0].Check != CheckDateMismatch {
+				t.Fatalf("findings %v, want the %s one", got, CheckDateMismatch)
+			}
+		})
+	}
+}
+
+var errUnreadable = errTest("the tag history cannot be read")
+
+type errTest string
+
+func (e errTest) Error() string { return string(e) }
+
+// A repository following the GitHub Actions convention keeps a moving major tag
+// beside the full one it points at, and both name the same version. The release
+// was cut at the fuller spelling; the shorter moves to the next release, so its
+// date says when it last moved and comparing an entry against it reports every
+// shipped release as misdated the moment the pointer advances.
+func TestLintDateMismatchPrefersTheFullestTagSpelling(t *testing.T) {
+	doc := []string{
+		"# Changelog", "",
+		"## [1.0.0] - 2026-01-01", "", "### Added", "- a thing",
+	}
+	// v1 has moved on since; v1.0.0 is where the release was cut.
+	g := &Git{
+		Tags:    []string{"v1", "v1.0.0"},
+		TagDays: map[string]string{"v1": "2026-06-06", "v1.0.0": "2026-01-01"},
+	}
+	if got := lintGit(t, g, doc...); len(got) != 0 {
+		t.Errorf("findings %v, want none: the release was cut at v1.0.0", got)
+	}
+
+	// Order must not decide it either.
+	g.Tags = []string{"v1.0.0", "v1"}
+	if got := lintGit(t, g, doc...); len(got) != 0 {
+		t.Errorf("findings %v with the tags the other way round, want none", got)
+	}
+
+	// And the fuller spelling is what is judged, so a real mismatch there still
+	// fires and names that tag rather than the pointer.
+	g.TagDays["v1.0.0"] = "2026-01-09"
+	got := lintGit(t, g, doc...)
+	if len(got) != 1 || got[0].Check != CheckDateMismatch {
+		t.Fatalf("findings %v, want the %s one", got, CheckDateMismatch)
+	}
+	if !strings.Contains(got[0].Msg, "v1.0.0") || strings.Contains(got[0].Msg, "tag v1 ") {
+		t.Errorf("finding %q names the wrong tag", got[0].Msg)
+	}
+}

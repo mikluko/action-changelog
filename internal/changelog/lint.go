@@ -138,6 +138,18 @@ func (c *Changelog) Lint(opts Options) []Finding {
 				f.add(CheckDateFuture, e.Line,
 					"version %s is dated %s, later than today, %s", e.Version[1:], e.Date, asOf)
 			}
+			// A tag names this version, so the entry is history and its date is
+			// a record rather than a prediction. An entry no tag names is
+			// silent here: a release pending is not a date that disagrees.
+			if isDate(e.Date) {
+				if name := opts.Git.tag(e); name != "" {
+					if day, ok := opts.Git.day(name); ok && day != e.Date {
+						f.add(CheckDateMismatch, e.Line,
+							"version %s is dated %s and tag %s was cut on %s",
+							e.Version[1:], e.Date, name, day)
+					}
+				}
+			}
 			if e.Body == "" {
 				f.add(CheckEmptyEntry, e.Line, "version %s has no entries under it", e.Version[1:])
 			}

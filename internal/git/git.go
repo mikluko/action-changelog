@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -55,6 +56,48 @@ func (t Tag) Version() string {
 		return ""
 	}
 	return v.Canonical().Tag()
+}
+
+// TagDay is the calendar day the tag was cut, as YYYY-MM-DD.
+//
+// Which date that is depends on the kind of tag, and a repository uses one kind
+// or the other rather than both: an annotated tag is an object carrying a
+// tagger date of its own, and a lightweight tag is a bare reference with no
+// date anywhere but on the commit it names. Assuming either kind alone is wrong
+// on half the repositories in reach.
+//
+// The day is taken in the tag's own timezone and not in UTC. A changelog date
+// is a bare calendar day, and what it means is the day the human cut the
+// release; normalising a tag cut at 23:30-07:00 to UTC moves it to the next day
+// and reports a correct entry as wrong.
+func (r *Repo) TagDay(t Tag) (string, error) {
+	when, err := r.tagTime(t.Hash)
+	if err != nil {
+		return "", err
+	}
+	return when.Format("2006-01-02"), nil
+}
+
+// tagTime returns the moment a tag names, following an annotated tag to its own
+// tagger date and a lightweight one to the committer date of the commit it
+// points at.
+func (r *Repo) tagTime(h plumbing.Hash) (time.Time, error) {
+	obj, err := r.store.EncodedObject(plumbing.AnyObject, h)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if obj.Type() == plumbing.TagObject {
+		t, err := object.GetTag(r.store, h)
+		if err != nil {
+			return time.Time{}, err
+		}
+		return t.Tagger.When, nil
+	}
+	c, err := r.commit(h)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return c.Committer.When, nil
 }
 
 // Repo is a read-only handle on a local repository.
@@ -322,23 +365,9 @@ func Versions(tags []Tag) []Tag {
 		if c := semver.Compare(a, b); c != 0 {
 			return c > 0
 		}
-		return components(out[i].Name) > components(out[j].Name)
+		return semver.TagComponents(out[i].Name) > semver.TagComponents(out[j].Name)
 	})
 	return out
-}
-
-// components counts the numeric parts a tag's name spells, so v1 answers 1 and
-// v1.0.0 answers 3.
-//
-// It reads the name rather than the version, because Version canonicalises them
-// to the same string, which is exactly what makes the two indistinguishable
-// without this.
-func components(name string) int {
-	v := strings.TrimPrefix(strings.TrimPrefix(name, "v"), "V")
-	if i := strings.IndexAny(v, "-+"); i >= 0 {
-		v = v[:i]
-	}
-	return strings.Count(v, ".") + 1
 }
 
 // discover searches dir and each of its parents for a repository, returning the

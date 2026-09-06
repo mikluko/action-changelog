@@ -144,6 +144,7 @@ annotation, and which is what `error`, `warn` and `off` take.
 | `unknown-section` | `error` | A level-3 heading is one of the accepted section vocabulary. |
 | `date-order` | `error` | Entry dates run newest first, matching the version order above them. |
 | `date-future` | `error` | No entry is dated later than today. |
+| `date-mismatch` | `error` | A released entry's date is the day its tag was cut. Silent for an entry no tag names, which is a release pending rather than a date that disagrees. |
 | `partial-link-refs` | `error` | Every versioned entry has a link reference definition, once any entry does. |
 | `prerelease-entry` | `off` | Policy: no entry names a pre-release version. Off by default; pre-release headings are legal. |
 | `undated-entry` | `error` | Policy: the newest entry states a date, where no final tag yet names its version. Switched off, that entry is open: a release still accumulating on a branch of its own, whether or not a candidate has been cut from it. |
