@@ -28,6 +28,21 @@ type Git struct {
 	// tagged whether or not the tag naming it is reachable from HEAD, which is
 	// the same set already-tagged is answered from.
 	Tags []string
+	// TagDays is the day each tag was cut, as YYYY-MM-DD, keyed by the name
+	// Tags spells. Which date a tag carries and which timezone reads it are
+	// settled by whoever fills this in; date-mismatch compares two calendar
+	// days and knows nothing of either. A tag absent from the map has no day
+	// that could be read, which is not evidence that a date disagrees.
+	TagDays map[string]string
+}
+
+// day returns the day the named tag was cut, and whether it is known.
+func (g *Git) day(name string) (string, bool) {
+	if g == nil || g.Err != nil {
+		return "", false
+	}
+	d, ok := g.TagDays[name]
+	return d, ok
 }
 
 // tag returns the tag naming version, as the repository spells it, or "" where
@@ -42,15 +57,24 @@ func (g *Git) tag(e Entry) string {
 	if g == nil || g.Err != nil || e.Version == "" {
 		return ""
 	}
+	// The fullest spelling wins. A repository keeping a moving "v1" beside the
+	// "v1.0.0" it points at has two tags naming one version, and the release
+	// was cut at the fuller one: the shorter moves to the next release, so its
+	// date is when it last moved rather than when anything shipped.
+	best, spelt := "", 0
 	for _, name := range g.Tags {
 		// Compare rather than string equality, so build metadata is ignored on
 		// both sides the way section 10 says it is: a tag cannot carry a "+" at
 		// all, and an entry naming one still names the version the tag names.
-		if t, err := semver.ParseTag(name); err == nil && semver.Compare(t, e.Semver) == 0 {
-			return name
+		t, err := semver.ParseTag(name)
+		if err != nil || semver.Compare(t, e.Semver) != 0 {
+			continue
+		}
+		if n := semver.TagComponents(name); n > spelt {
+			best, spelt = name, n
 		}
 	}
-	return ""
+	return best
 }
 
 // git runs the checks that read the repository rather than the document.

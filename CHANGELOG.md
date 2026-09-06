@@ -18,6 +18,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   described from the wrong entry. It is the split `undated-entry` and
   `undated-release` made, for the same reason. Sixteen checks.
 
+- **`date-mismatch`, for a released entry whose date is not the day its tag was
+  cut**, at `error`. Nothing compared the two: `date-format` reads the shape,
+  `date-order` and `date-future` read the document alone, and the immutability
+  pair compares text. An entry could claim `2026-09-01` while `v1.2.3` was cut
+  on the 11th and every check passed. An entry no tag names is silent, because a
+  release pending is not a date that disagrees. Seventeen checks.
+
+  Two things it has to get right, and both are settled where the tag is read
+  rather than where the dates are compared. **A repository cuts one kind of tag
+  or the other**, and they carry their date in different places: an annotated
+  tag has a tagger date of its own, a lightweight tag is a bare reference whose
+  only date is on the commit it names. **And the day is the tag's own, not
+  UTC** — a changelog date means the day the human cut the release, so
+  normalising a tag cut at 23:30-07:00 turns a correct entry into a finding.
+
 ### Changed
 
 - **What counts as a version is Semantic Versioning 2.0.0 exactly**, read by a

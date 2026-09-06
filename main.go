@@ -173,11 +173,11 @@ func state(path string, admit git.Eligible) repoState {
 		if shallow {
 			return repoState{Check: &changelog.Git{Err: errors.New("the checkout is shallow and reaches no version tag")}}
 		}
-		return repoState{Check: &changelog.Git{Tags: tagNames(tags)}, Tags: tags}
+		return repoState{Check: &changelog.Git{Tags: tagNames(tags), TagDays: tagDays(repo, tags)}, Tags: tags}
 	}
 
 	out := repoState{
-		Check:     &changelog.Git{ReferenceTag: reference.Name, Tags: tagNames(tags)},
+		Check:     &changelog.Git{ReferenceTag: reference.Name, Tags: tagNames(tags), TagDays: tagDays(repo, tags)},
 		Tags:      tags,
 		Reference: reference.Name,
 	}
@@ -224,6 +224,22 @@ func outputs(doc *changelog.Changelog, tags []git.Tag, reference string, finding
 		// since released, which never stop being pre-releases.
 		{Name: "prerelease", Value: strconv.FormatBool(prerelease)},
 	}
+}
+
+// tagDays is the day each tag was cut, which is what date-mismatch compares a
+// released entry's date against.
+//
+// A tag whose date cannot be read is left out rather than reported: the check
+// reads a missing day as nothing to compare, and a history that cannot be read
+// at all is already no-git-tags' to report by name.
+func tagDays(repo *git.Repo, tags []git.Tag) map[string]string {
+	out := make(map[string]string, len(tags))
+	for _, t := range tags {
+		if day, err := repo.TagDay(t); err == nil {
+			out[t.Name] = day
+		}
+	}
+	return out
 }
 
 // tagNames is every tag as the repository spells it, which is what

@@ -53,6 +53,7 @@ const (
 	CheckUnknownSection    = "unknown-section"
 	CheckDateOrder         = "date-order"
 	CheckDateFuture        = "date-future"
+	CheckDateMismatch      = "date-mismatch"
 	CheckPartialLinkRef    = "partial-link-refs"
 	CheckPrereleaseEntry   = "prerelease-entry"
 	CheckUndatedEntry      = "undated-entry"
@@ -125,6 +126,11 @@ var Checks = []Check{
 	{
 		Name:        CheckDateFuture,
 		Description: "No entry is dated later than today.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckDateMismatch,
+		Description: "A released entry's date is the day its tag was cut. Silent for an entry no tag names, which is a release pending rather than a date that disagrees.",
 		Default:     Error,
 	},
 	{
