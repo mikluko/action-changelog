@@ -1,8 +1,11 @@
 package changelog
 
 import (
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/mikluko/action-changelog/internal/semver"
 )
 
 func TestParseHeadingForms(t *testing.T) {
@@ -12,22 +15,48 @@ func TestParseHeadingForms(t *testing.T) {
 		version    string
 		date       string
 		unreleased bool
+		rule       semver.Rule
 	}{
-		{"bracketed with date", "[1.2.3] - 2026-09-04", "v1.2.3", "2026-09-04", false},
-		{"bracketed no date", "[1.2.3]", "v1.2.3", "", false},
-		{"bare with date", "1.2.3 - 2026-09-04", "v1.2.3", "2026-09-04", false},
-		{"v prefix", "[v1.2.3] - 2026-09-04", "v1.2.3", "2026-09-04", false},
-		{"unreleased", "[Unreleased]", "", "", true},
-		{"unreleased bare", "Unreleased", "", "", true},
-		{"prerelease", "[1.2.3-rc.1] - 2026-09-04", "v1.2.3-rc.1", "2026-09-04", false},
-		{"not a version", "[Yanked] - 2026-09-04", "", "", false},
-		{"partial version", "[1.2] - 2026-09-04", "", "", false},
+		{name: "bracketed with date", in: "[1.2.3] - 2026-09-04", version: "v1.2.3", date: "2026-09-04"},
+		{name: "bracketed no date", in: "[1.2.3]", version: "v1.2.3"},
+		{name: "bare with date", in: "1.2.3 - 2026-09-04", version: "v1.2.3", date: "2026-09-04"},
+		{name: "unreleased", in: "[Unreleased]", unreleased: true},
+		{name: "unreleased bare", in: "Unreleased", unreleased: true},
+		{name: "prerelease", in: "[1.2.3-rc.1] - 2026-09-04", version: "v1.2.3-rc.1", date: "2026-09-04"},
+
+		// Build metadata is valid Semantic Versioning, so the heading names a
+		// version. Whether this repository wants one is oci-incompatible-version's
+		// to say, and not this parser's.
+		{name: "build metadata", in: "[1.2.3+build.1] - 2026-09-04", version: "v1.2.3+build.1", date: "2026-09-04"},
+
+		// The leading "v" is golang.org/x/mod/semver's requirement, not the
+		// specification's, and a heading is not a tag.
+		{name: "v prefix", in: "[v1.2.3] - 2026-09-04", rule: semver.RuleVPrefix},
+
+		{name: "not a version", in: "[Yanked] - 2026-09-04", rule: semver.RuleCore},
+		{name: "not a number", in: "[1.2.x] - 2026-09-04", rule: semver.RuleNumeric},
+		{name: "partial version", in: "[1.2] - 2026-09-04", rule: semver.RuleCore},
+		{name: "leading zero", in: "[01.2.3] - 2026-09-04", rule: semver.RuleLeadingZero},
+		{name: "empty prerelease", in: "[1.2.3-] - 2026-09-04", rule: semver.RuleEmptyIdent},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			v, d, u := parseHeading(tc.in)
+			v, d, u, err := parseHeading(tc.in)
 			if v != tc.version || d != tc.date || u != tc.unreleased {
 				t.Errorf("parseHeading(%q) = (%q, %q, %v), want (%q, %q, %v)",
 					tc.in, v, d, u, tc.version, tc.date, tc.unreleased)
+			}
+			if tc.rule == "" {
+				if err != nil {
+					t.Errorf("parseHeading(%q) = %v, want no error", tc.in, err)
+				}
+				return
+			}
+			var se *semver.SyntaxError
+			if !errors.As(err, &se) {
+				t.Fatalf("parseHeading(%q) = %v, want a *semver.SyntaxError", tc.in, err)
+			}
+			if se.Rule != tc.rule {
+				t.Errorf("parseHeading(%q) broke %s, want %s", tc.in, se.Rule, tc.rule)
 			}
 		})
 	}

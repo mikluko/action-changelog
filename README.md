@@ -136,7 +136,7 @@ annotation, and which is what `error`, `warn` and `off` take.
 
 | Check | Default | Description |
 |---|---|---|
-| `unreadable-version` | `error` | An entry heading is [Unreleased] or names a version that can be read, as in [1.2.3]. Where the newest one names none, nothing is the newest entry and version and notes report nothing. |
+| `unreadable-version` | `error` | An entry heading is [Unreleased] or names a Semantic Versioning 2.0.0 version, as in [1.2.3]: three components, no leading v. Where the newest one names none, nothing is the newest entry and version and notes report nothing. |
 | `heading-form` | `error` | An entry heading states a date beside its version, as in [1.2.3] - 2006-01-02. The newest entry may omit the date, which undated-entry and undated-release answer for. |
 | `date-format` | `error` | An entry's date is written YYYY-MM-DD. |
 | `version-order` | `error` | Entries run newest first, each version strictly below the one above it. |
