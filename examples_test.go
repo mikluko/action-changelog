@@ -30,11 +30,12 @@ const (
 	trunkMain    = "examples/release-trunk/workflows/main.yaml"
 	trunkRequest = "examples/release-trunk/workflows/pull-request.yaml"
 
-	branchGood    = "examples/release-branch/CHANGELOG.md"
-	branchBroken  = "examples/release-branch/CHANGELOG.broken.md"
-	branchStable  = "examples/release-branch/workflows/release-branch.yaml"
-	branchMain    = "examples/release-branch/workflows/main.yaml"
-	branchRequest = "examples/release-branch/workflows/pull-request.yaml"
+	branchGood      = "examples/release-branch/CHANGELOG.md"
+	branchBroken    = "examples/release-branch/CHANGELOG.broken.md"
+	branchCI        = "examples/release-branch/workflows/ci.yaml"
+	branchCandidate = "examples/release-branch/workflows/release-candidate.yaml"
+	branchRelease   = "examples/release-branch/workflows/release.yaml"
+	branchPublish   = "examples/release-branch/workflows/publish.yaml"
 )
 
 // exampleSections is the vocabulary both strategies accept, which is the Keep a
@@ -181,17 +182,24 @@ func TestReleaseBranchWorkflowInputs(t *testing.T) {
 		workflow string
 		want     map[string]string
 	}{
-		{branchStable, map[string]string{
+		{branchCI, map[string]string{
+			"sections": exampleSections,
+			"error":    changelog.CheckPrereleaseEntry,
+			"off":      changelog.CheckUndatedEntry,
+		}},
+		{branchCandidate, map[string]string{
 			"sections":       exampleSections,
+			"error":          changelog.CheckPrereleaseEntry,
 			"off":            changelog.CheckUndatedEntry,
 			"reference-tags": "final",
 		}},
-		{branchMain, map[string]string{
+		{branchRelease, map[string]string{
 			"sections": exampleSections,
 			"error":    changelog.CheckPrereleaseEntry,
 		}},
-		{branchRequest, map[string]string{
+		{branchPublish, map[string]string{
 			"sections": exampleSections,
+			"error":    changelog.CheckPrereleaseEntry,
 			"off":      changelog.CheckUndatedEntry,
 		}},
 	} {
@@ -203,58 +211,78 @@ func TestReleaseBranchWorkflowInputs(t *testing.T) {
 	}
 }
 
+// The four invocations differ in exactly one input: release.yaml keeps
+// undated-entry at its default, and the other three switch it off. That is the
+// whole of what the strategy costs in configuration, and a second difference
+// would make the README's claim false without any test noticing.
+func TestReleaseBranchInvocationsDifferInOneInput(t *testing.T) {
+	release := exampleInputs(t, branchRelease)
+	for _, other := range []string{branchCI, branchCandidate, branchPublish} {
+		t.Run(filepath.Base(other), func(t *testing.T) {
+			with := exampleInputs(t, other)
+			delete(with, "reference-tags") // candidate alone states the default
+			if got, want := with["off"], changelog.CheckUndatedEntry; got != want {
+				t.Errorf("%s switches off %q, want %q", other, got, want)
+			}
+			delete(with, "off")
+			if !reflect.DeepEqual(with, release) {
+				t.Errorf("%s carries %v beyond that, want %v", other, with, release)
+			}
+		})
+	}
+}
+
 // undated-entry is the check the stabilization branch switches off; the strategy
 // breaks where undated-release goes off beside it. That one fires only where a
 // tag already names the undated entry's version, which is a release that shipped
 // and nobody dated, and no branch wants that. The two read alike in a workflow
 // and mean opposite things, so the branch invocation is held to the distinction.
 func TestReleaseBranchKeepsUndatedReleaseOn(t *testing.T) {
-	with := exampleInputs(t, branchStable)
+	with := exampleInputs(t, branchCandidate)
 	sev, err := severities(with["error"], with["warn"], with["off"])
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := sev[changelog.CheckUndatedEntry]; got != changelog.Off {
-		t.Errorf("the branch invocation runs %s at %s, want off", changelog.CheckUndatedEntry, got)
+		t.Errorf("the candidate invocation runs %s at %s, want off", changelog.CheckUndatedEntry, got)
 	}
 	if got := sev[changelog.CheckUndatedRelease]; got != changelog.Error {
-		t.Errorf("the branch invocation runs %s at %s, want error", changelog.CheckUndatedRelease, got)
+		t.Errorf("the candidate invocation runs %s at %s, want error", changelog.CheckUndatedRelease, got)
 	}
 }
 
-// One document under the three invocations is the whole strategy: the open entry
-// names a candidate and passes where the branch says both are legitimate, and is
-// refused twice over on the trunk, once for the missing date and once for the
-// identifier. Neither refusal is a defect in the example. That file never reaches
-// the trunk in that state, because the branch drops the identifier and the merge
-// dates the entry.
+// One document under the four invocations is the whole strategy. The open entry
+// names the release it is heading for and carries no date, which is legitimate
+// everywhere but on the trunk: the merge is what dates it, so an entry reaching
+// release.yaml still open is a release nobody finished. That file never reaches
+// the trunk in that state.
 func TestReleaseBranchOpenEntry(t *testing.T) {
 	forEachInvocation(t, branchGood, []exampleCase{
-		{branchStable, nil},
-		{branchRequest, nil},
-		{branchMain, []string{changelog.CheckUndatedEntry, changelog.CheckPrereleaseEntry}},
+		{branchCI, nil},
+		{branchCandidate, nil},
+		{branchPublish, nil},
+		{branchRelease, []string{changelog.CheckUndatedEntry}},
 	})
 }
 
 // The broken copy fails with the findings the README lists, per invocation.
 // Asserting the set rather than the count is what keeps the README honest: a
 // check that stopped firing would otherwise be covered by one that started.
+//
+// prerelease-entry is raised on every invocation, which is the strategy's own
+// doing: the document names the release it heads for and never an attempt, so a
+// candidate in a heading is wrong wherever it is read.
 func TestReleaseBranchBrokenChangelogFailsWithTheFindingsItClaims(t *testing.T) {
+	shared := []string{
+		changelog.CheckPartialLinkRef,
+		changelog.CheckHeadingForm,
+		changelog.CheckPrereleaseEntry,
+	}
 	forEachInvocation(t, branchBroken, []exampleCase{
-		{branchStable, []string{
-			changelog.CheckPartialLinkRef,
-			changelog.CheckHeadingForm,
-		}},
-		{branchRequest, []string{
-			changelog.CheckPartialLinkRef,
-			changelog.CheckHeadingForm,
-		}},
-		{branchMain, []string{
-			changelog.CheckUndatedEntry,
-			changelog.CheckPartialLinkRef,
-			changelog.CheckHeadingForm,
-			changelog.CheckPrereleaseEntry,
-		}},
+		{branchCI, shared},
+		{branchCandidate, shared},
+		{branchPublish, shared},
+		{branchRelease, append([]string{changelog.CheckUndatedEntry}, shared...)},
 	})
 }
 

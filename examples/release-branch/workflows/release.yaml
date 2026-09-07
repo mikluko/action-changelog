@@ -1,0 +1,67 @@
+name: release
+run-name: 🏷️ Release
+
+# The trunk. The merge from a stabilization branch is what dates the entry, and
+# dating it is what cuts the release.
+#
+# paths is what makes the changelog decide: a push that touches no changelog
+# names no new version, so there is nothing to cut and this never runs.
+on:
+  push:
+    branches: [main]
+    paths:
+      - CHANGELOG.md
+
+concurrency:
+  group: ${{ github.workflow }}/${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.changelog.outputs.version }}
+      tagged: ${{ steps.changelog.outputs.already-tagged }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: changelog
+        uses: mikluko/action-changelog@v1
+        with:
+          sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
+          error: prerelease-entry
+          # undated-entry is left at its default, error, and this is the only
+          # invocation that does. The merge dates the entry, so one reaching the
+          # trunk still open is a release nobody finished.
+
+  suite:
+    uses: ./.github/workflows/suite.yaml
+
+  tag:
+    needs: [changelog, suite]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      # Nothing is composed here: the version the entry names is the tag. A tag
+      # pushed with the default GITHUB_TOKEN triggers no workflow, so
+      # publish.yaml would never run; a repository passes a token of its own.
+      - name: Cut the release
+        env:
+          VERSION: ${{ needs.changelog.outputs.version }}
+          TAGGED: ${{ needs.changelog.outputs.tagged }}
+        run: |
+          skip() { echo "$1" >>"$GITHUB_STEP_SUMMARY"; exit 0; }
+          [ -n "$VERSION" ]     || skip "No release: the changelog names no version."
+          [ "$TAGGED" = false ] || skip "No release: v$VERSION is already tagged."
+
+          git tag "v$VERSION"
+          git push origin "refs/tags/v$VERSION"
+          echo "Cut **v$VERSION**." >>"$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,95 @@
+name: release-candidate
+run-name: 🏗️ Candidate for ${{ github.base_ref }}
+
+# A candidate per revision of a pull request into a stabilization branch.
+#
+# paths is what makes the changelog decide: a pull request that touches no
+# changelog proposes no release, so nothing is cut and this never runs. The
+# filter is a three-dot diff over the whole pull request, so once a revision
+# names the release every later revision still matches and the ordinal advances.
+on:
+  pull_request:
+    branches:
+      - 'release/*'
+    paths:
+      - CHANGELOG.md
+
+# Not cancelled: a run may be part-way through pushing a tag.
+concurrency:
+  group: ${{ github.workflow }}/${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.changelog.outputs.version }}
+      tagged: ${{ steps.changelog.outputs.already-tagged }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: changelog
+        uses: mikluko/action-changelog@v1
+        with:
+          sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
+          error: prerelease-entry
+          # The open entry is this branch's normal state.
+          "off": undated-entry
+          # all would make a candidate cut here the reference, and the entry
+          # this branch exists to rewrite would trip release-entry-modified on
+          # every revision.
+          reference-tags: final
+
+  suite:
+    uses: ./.github/workflows/suite.yaml
+
+  # The tag is cut in a job so the suite can go in front of it. A pull request
+  # is what publishes here, so this gate is the only one there is: the branch
+  # has no push trigger and nothing is published from its tip.
+  tag:
+    needs: [changelog, suite]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      # A tag pushed with the default GITHUB_TOKEN triggers no workflow, so
+      # publish.yaml would never run. A repository passes a token of its own.
+      - name: Cut the candidate
+        env:
+          VERSION: ${{ needs.changelog.outputs.version }}
+          TAGGED: ${{ needs.changelog.outputs.tagged }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          # Each guard is a no-op condition: nothing to cut, so exit green.
+          skip() { echo "$1" >>"$GITHUB_STEP_SUMMARY"; exit 0; }
+          [ -n "$VERSION" ]     || skip "No candidate: the changelog names no version."
+          [ "$TAGGED" = false ] || skip "No candidate: v$VERSION is tagged, so this branch is spent."
+
+          # release/v1.3.0-rc under an entry naming 1.3.0 gives rc. A branch not
+          # spelled v<version>-<stage> names no stage of this version: either it
+          # or the entry is wrong, and they have to agree.
+          stage="${BASE#release/}"
+          stage="${stage#v$VERSION-}"
+          case "$BASE" in
+            "release/v$VERSION-$stage") ;;
+            *) echo "::error::$BASE names no stage of v$VERSION"; exit 1 ;;
+          esac
+
+          # The ordinal is the highest already cut for this version and stage,
+          # plus one. Never a run number, which counts a workflow file's runs
+          # and resets when the file is renamed.
+          prev=$(git tag --list "v$VERSION-$stage.*" \
+                 | sed "s|^v$VERSION-$stage\.||" \
+                 | grep -E '^[0-9]+$' | sort -n | tail -1)
+          tag="v$VERSION-$stage.$(( ${prev:-0} + 1 ))"
+
+          git tag "$tag"
+          git push origin "refs/tags/$tag"
+          echo "Cut **$tag**." >>"$GITHUB_STEP_SUMMARY"

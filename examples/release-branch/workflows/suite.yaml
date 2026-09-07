@@ -1,0 +1,17 @@
+name: suite
+run-name: 🧪 Suite
+
+# The gate, called by every workflow that must not cut or publish past a broken
+# tree. It is a workflow rather than a job in each file so that there is one
+# copy of it, and `needs:` has something to name.
+#
+# Replace the step with whatever this repository's tests are.
+on:
+  workflow_call:
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: echo "Run the tests."

@@ -10,8 +10,8 @@ into `.github/workflows/`, copy the changelog's shape, and adjust the
 vocabulary and the link references to the repository.
 
 [`../release-branch/`](../release-branch/) is the other strategy, where a
-release opens on a branch of its own and its entry carries no date until that
-branch merges.
+release opens on a branch of its own, its entry carries no date until that branch
+merges, and each pull request into it cuts a numbered candidate.
 
 ## The policy
 

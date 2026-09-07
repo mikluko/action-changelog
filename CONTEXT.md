@@ -24,7 +24,8 @@ check             raises    a finding against a line, at a severity
 register          fixes     every check and the severity it carries by default
 reference tag     is        the newest version tag reachable from HEAD
 release-trunk     cuts      one tag on the trunk, from the newest entry
-release-branch    cuts      the version the entry names, on a stabilization branch
+release-branch    cuts      a numbered candidate per pull request into a
+                            stabilization branch, and the release on merge
 merge to trunk    dates     the open entry, and ends a release-branch release
 ceremony          reads     version, prerelease and already-tagged, and cuts the tag
 ```
@@ -142,7 +143,7 @@ _Avoid_: master, mainline, default branch (which names a repository setting)
 
 **Stabilization branch**:
 A branch opened to carry one release while it is still accumulating, deleted once
-it merges. It is where a release-branch ceremony cuts its candidates, and it
+it merges. It is where a release-branch ceremony's candidates are cut, and it
 is not a support line: nothing is maintained on it after the merge.
 _Avoid_: release branch (release-branch is the ceremony), pre-release branch,
 RC branch
@@ -155,8 +156,9 @@ _Avoid_: continuous release, trunk-based release
 
 **Release-branch**:
 The ceremony with two: a release is opened as an open entry on a stabilization
-branch, the version that entry names is cut as a tag whenever it is untagged, and
-merging to the trunk dates the entry and cuts the final tag. A candidate is that
-entry naming one, so writing 1.3.0-rc.2 in the heading is what cuts it.
+branch naming the version it is heading for, each pull request into that branch
+cuts a numbered candidate, and merging to the trunk dates the entry and cuts the
+release. The document names the release and never an attempt at one, so a
+candidate is a tag the ceremony composes rather than a heading anybody writes.
 _Avoid_: release train, GitFlow release, pre-release branch (which names the
 branch, not the ceremony)
