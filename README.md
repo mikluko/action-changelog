@@ -271,12 +271,33 @@ that enforce it, and a deliberately broken copy.
 entry names a version and a date, a push to the trunk finds that version
 untagged, and the tag is cut. One branch, one ceremony.
 
+```
+one entry, one tag
+
+## [1.2.0] - 2026-08-01   ──▷   v1.2.0
+## [1.3.0] - 2026-09-12   ──▷   v1.3.0
+
+the entry is written complete, date and all, and merging cuts what it names
+```
+
 [`release-branch/`](examples/release-branch/) opens a release on a branch of its
 own. The entry names the version it is heading for and carries no date while the
 branch accumulates, every pull request into that branch cuts a numbered
 candidate — `v1.3.0-rc.1`, `v1.3.0-rc.2` — and merging to the trunk dates the
 entry and cuts `v1.3.0`. The document names the release; the machine numbers the
 attempts, so a heading never carries an identifier.
+
+```
+one entry, many tags
+
+## [1.3.0]                ──▷   v1.3.0-rc.1     one per pull request
+  no date, for as long    ──▷   v1.3.0-rc.2     into release/v1.3.0-rc
+  as the branch lives     ──▷   v1.3.0-rc.3
+
+## [1.3.0] - 2026-09-12   ──▷   v1.3.0          the merge dates that
+                                                same entry, and that is
+                                                the release
+```
 
 `go test ./...` validates both trees under the inputs their workflows carry, so
 the examples are executed rather than described.
