@@ -1,143 +1,143 @@
 # release-branch
 
-A release opens on a branch of its own. Its entry names a version and carries no
-date, because the release date is not known while the branch is still
-accumulating. The version that entry names is the tag: writing `1.3.0-rc.2` in
-the heading is what cuts `v1.3.0-rc.2`. Merging to the trunk dates the entry and
-cuts the final tag.
+A release opens on a branch of its own and accumulates there until it is ready.
 
-A complete policy: a changelog written to it, and the three workflow invocations
-that hold a repository to it. Copy the workflows into `.github/workflows/`, copy
-the changelog's shape, and adjust the vocabulary and the link references.
+**The changelog names the release it is heading for, and never an attempt at
+one.** The entry says `1.3.0` from the moment the branch opens and carries no
+date, because the date is not known yet. Every revision of a pull request into
+that branch cuts a numbered candidate — `v1.3.0-rc.1`, `v1.3.0-rc.2` — and
+merging to the trunk dates the entry and cuts `v1.3.0`.
+
+So a heading never carries `-rc.2`. The document states the destination; the
+machine numbers the attempts.
+
+A complete policy: a changelog written to it, and four workflow invocations that
+hold a repository to it. Copy them into `.github/workflows/`, copy the
+changelog's shape, and adjust the vocabulary and the link references.
 [`../release-trunk/`](../release-trunk/) is the other strategy, where the release
 happens on the trunk and every entry carries its date from the moment it is
 written.
 
-## The version is written, never derived
+## Four events, and what each yields
 
-Neither the action nor the workflow proposes a tag spelling. Both cut the version
-the newest entry names, and they differ in one word:
+| Workflow | Runs on | Yields |
+|---|---|---|
+| [`ci.yaml`](workflows/ci.yaml) | any pull request | a verdict — nothing is cut |
+| [`release-candidate.yaml`](workflows/release-candidate.yaml) | a pull request into `release/*` | `v1.3.0-rc.4` |
+| [`release.yaml`](workflows/release.yaml) | a push to `main` | `v1.3.0` |
+| [`publish.yaml`](workflows/publish.yaml) | a tag | artifacts, and a GitHub release for a final tag |
+
+Read the last column and you have the strategy. [`suite.yaml`](workflows/suite.yaml)
+is the fifth file and yields nothing: it is the tests, called by everything that
+must not cut past a broken tree.
+
+**The changelog decides whether a run happens at all.** The two cutting
+workflows carry `paths: [CHANGELOG.md]`, so a change that proposes no release
+starts nothing. On a pull request that filter is a three-dot diff over the whole
+request, so once a revision names the release, every later revision still matches
+and the ordinal advances.
+
+## Nothing is published from a push to the branch
+
+A release branch has **no push trigger**. Its tip is never published in its own
+right; a candidate comes from a pull request into it, which is what gives the
+suite somewhere to stand:
 
 ```yaml
-# workflows/release-branch.yaml            # workflows/main.yaml
-if: >-                                     if: >-
-  ...prerelease == 'true' &&                 ...prerelease == 'false' &&
-  ...already-tagged == 'false'               ...already-tagged == 'false'
+  tag:
+    needs: [changelog, suite]
 ```
 
-`prerelease` says whether the version carries an identifier, so the branch cuts
-candidates and the trunk cuts releases, and dropping `-rc.2` from the heading is
-how the branch says the release is ready. `already-tagged` says the version is
-already cut, so **a push that does not change the version cuts nothing**: the
-file advances the sequence, not the pushing. A second candidate is that heading
-rewritten. Nothing reads the branch name and nothing counts runs.
-
-**Pick stage names that sort in the order the stages run, and check them.** Under
-[SemVer §11](https://semver.org/spec/v2.0.0.html#spec-item-11) identifiers compare
-in ASCII order, so `alpha < beta < pre < rc` and all of them below the release —
-but `candidate` sorts below `early`, and `snapshot` sorts *above* `rc`, which is
-why Maven's `SNAPSHOT` needs a comparison rule of its own. It matters when a third
-stage is added, which is the one moment nobody is reading a workflow that works.
+A push arrives with nothing in front of it, and a pull request does not. That is
+the whole reason the trigger is what it is, and the reason the cut is a job
+rather than a step: `needs:` is job-level, so a step has no boundary a gate can
+attach to.
 
 ## The open entry
 
 | Heading | What it is |
 |---|---|
 | `## [Unreleased]` | names no version: unchanged, permanent |
-| `## [1.3.0-rc.1]` | names a version, carries no date: an **open entry** |
+| `## [1.3.0]` | names a version, carries no date: an **open entry** |
 | `## [1.3.0] - 2026-09-12` | names a version and a date: a released entry |
 
 An open entry is illegal under Keep a Changelog, which is why `undated-entry`
-defaults to `error`; switching it off is how one branch says its newest entry is
-open rather than malformed. Two things do not move with it. **`undated-release`
-stays at `error` everywhere**: it fires where the newest entry carries no date
-*and a final tag already names its version*, which is a release that shipped and
-nobody dated. A candidate tag naming the candidate this branch is accumulating is
-not that, and does not fire it. And **`heading-form` keeps erroring on any other undated entry**, the
-relaxation being scoped to the newest one.
+defaults to `error`; switching it off is how an invocation says a release is in
+flight rather than that the document is malformed. It fires only on the newest
+*versioned* entry, so an ordinary pull request that touches no release never
+meets it — which is why `ci.yaml` can switch it off for every pull request
+without weakening anything.
+
+Two things do not move with it. **`undated-release` stays at `error`
+everywhere**: it fires where the newest entry carries no date *and a final tag
+already names its version*, which is a release that shipped and nobody dated.
+And **`heading-form` keeps erroring on any other undated entry**, the relaxation
+being scoped to the newest one.
 
 An open entry carries its link reference definition in released form from the
-moment it is opened, `[1.3.0-rc.1]: .../compare/v1.2.0...v1.3.0-rc.1`. That link
-is broken until the tag is cut and nothing exempts it: `partial-link-refs` tests
-that a definition exists and never resolves the URL.
+moment it is opened, `[1.3.0]: .../compare/v1.2.0...v1.3.0`. That link is broken
+until the tag is cut and nothing exempts it: `partial-link-refs` tests that a
+definition exists and never resolves the URL.
 
-## `prerelease-entry` is the trunk's, and only the trunk's
+## `prerelease-entry` is on everywhere
 
-A candidate is a heading here, so the branch and pull-request invocations must not
-raise it; the trunk must, because a release reaching it still carrying an
-identifier is one nobody finished. The cost, stated rather than hidden: the check
-judges the whole document, so switching it off to permit the newest heading
-permits a stale candidate below it too.
+A candidate is a tag this strategy composes, never a heading, so an identifier in
+the document is a defect wherever it is read. There is no invocation that relaxes
+it and no document state that wants it relaxed.
 
-This is where the two strategies part. Under
-[`../release-trunk/`](../release-trunk/) a candidate can only be an entry on the
-trunk, so the check is off for the pull request and on for the push. Here the axis
-is the branch rather than the trigger.
+This is where the two strategies part, and it is the reverse of what a reader
+might expect: the strategy with candidates is the one whose *document* never
+names one.
 
 ## `reference-tags: final`, and why it is a requirement
 
 Under `final` a pre-release is never the reference tag the repository-reading
-checks compare against; under `all` it may be. The stabilization branch is where
-raising it to `all` looks right and is the one place it must not be: that branch
-cuts `v1.3.0-rc.N`, so the reference becomes a candidate tag cut on the branch
-itself, whose changelog already carries the entry that named it. Rewriting that
-heading for the next candidate then trips `release-entry-modified` — and under
-this strategy rewriting it is the mechanism rather than an accident.
+checks compare against; under `all` it may be. The candidate invocation is where
+raising it to `all` looks right and is the one place it must not be: that
+invocation cuts `v1.3.0-rc.N`, so the reference would become a candidate cut from
+the same branch, whose changelog already carries the entry that named it.
+Rewriting that entry for the next candidate then trips
+`release-entry-modified` — and rewriting it is the mechanism rather than an
+accident.
 
-`final` is the default, so the other two invocations rely on it without saying so.
+`final` is the default, so the other three rely on it without saying so.
 
 ## What it costs in configuration
 
-| | [`release-branch.yaml`](workflows/release-branch.yaml) | [`main.yaml`](workflows/main.yaml) | [`pull-request.yaml`](workflows/pull-request.yaml) |
-|---|---|---|---|
-| runs on | a push to `release/*` | a push to `main` | a pull request |
-| `sections` | the six plus `Breaking` | the six plus `Breaking` | the six plus `Breaking` |
-| `off` | `undated-entry` | *(unset)* | `undated-entry` |
-| `error` | *(unset)* | `prerelease-entry` | *(unset)* |
-| `reference-tags` | `final` | *(default)* | *(default)* |
+One input, on one of the four.
 
-## The tag is cut in a job of its own, so something can go in front of it
+| | `ci` | `release-candidate` | `release` | `publish` |
+|---|---|---|---|---|
+| `sections` | the six plus `Breaking` | the six plus `Breaking` | the six plus `Breaking` | the six plus `Breaking` |
+| `error` | `prerelease-entry` | `prerelease-entry` | `prerelease-entry` | `prerelease-entry` |
+| `off` | `undated-entry` | `undated-entry` | *(unset)* | `undated-entry` |
+| `reference-tags` | *(default)* | `final` | *(default)* | *(default)* |
 
-Every push to a release branch publishes, and a push arrives without a pull
-request. A merge to the trunk is gated because it comes through one; a push here
-is gated by nothing. Under release-trunk that barely bites, since a push to the
-trunk publishes a release and those are rare and reviewed. Here it is every push.
-
-The example carries no test job — these demonstrate the action, not a whole
-pipeline — but the seam one needs is there:
-
-```yaml
-  tag:
-    needs: [changelog]        # add your test job here
-```
-
-`needs:` is a job-level key, so the cut has to be a job for a gate to have
-anywhere to attach. That is the only reason it is not a step alongside the
-action. Both files also keep `contents: read` at the top and grant
-`contents: write` on the `tag` job alone, so nothing but the cut can push.
+`release.yaml` is the one that keeps `undated-entry`, because the merge is what
+dates the entry and one reaching the trunk still open is a release nobody
+finished. A test holds the four to exactly that difference.
 
 ## The two documents
 
-[`CHANGELOG.md`](CHANGELOG.md) is the branch's own state. It passes under the
-branch and pull-request invocations and raises `undated-entry` under the trunk
-one, which is correct: it never reaches the trunk in that state, because the merge
-dates the entry first.
+[`CHANGELOG.md`](CHANGELOG.md) is the branch's own state. It passes under three
+invocations and raises `undated-entry` under `release.yaml`, which is correct: it
+never reaches the trunk in that state, because the merge dates the entry first.
 
-[`CHANGELOG.broken.md`](CHANGELOG.broken.md) departs three times, and what each
-costs depends on which invocation reads it:
+[`CHANGELOG.broken.md`](CHANGELOG.broken.md) departs three times, and every
+invocation reports all three:
 
-| Departure | Check | Reported by |
-|---|---|---|
-| the open entry has no link reference definition | `partial-link-refs` | all three |
-| `1.2.0`, below the newest entry, also carries no date | `heading-form` | all three |
-| `## [1.1.0-pre.3]`, a candidate never rewritten into its release | `prerelease-entry` | the trunk |
+| Departure | Check |
+|---|---|
+| the open entry has no link reference definition | `partial-link-refs` |
+| `1.2.0`, below the newest entry, also carries no date | `heading-form` |
+| `## [1.1.0-rc.3]`, a candidate written into the document | `prerelease-entry` |
 
-The trunk reports a fourth, `undated-entry`, for the same reason it reports it on
-`CHANGELOG.md`. `go test ./...` runs both documents under the inputs all three
-workflows carry and holds the broken one to exactly those lists, so the example is
-executed rather than described.
+`release.yaml` reports a fourth, `undated-entry`, for the same reason it reports
+it on `CHANGELOG.md`. `go test ./...` runs both documents under the inputs all
+four workflows carry and holds the broken one to exactly those lists, so the
+example is executed rather than described.
 
-The five checks that read the repository are not among them: they compare a
-document against the tags of the repository it lives in, and these live in this
-one. `undated-release` is one of the five, so what holds it is a test asserting
-the branch invocation leaves it at `error` rather than a document provoking it.
+The checks that read the repository are not among them: they compare a document
+against the tags of the repository it lives in, and these live in this one.
+`undated-release` is one of them, so what holds it is a test asserting the
+candidate invocation leaves it at `error` rather than a document provoking it.

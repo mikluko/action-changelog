@@ -7,22 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **`undated-release` no longer fires where the tag naming the newest entry is a
-  candidate.** The check split on whether *a* tag already named the entry's
-  version, read as *the release shipped*. That reading is sound for a final and
-  false for a pre-release: a candidate ships its tag and stays undated on
-  purpose, which is what a stabilization branch is for. It fires on a **final**
-  tag now, and a candidate falls through to `undated-entry`, which is the check
-  such a branch already switches off.
-- The defect was unreachable until the `release-branch` example stopped
-  composing its tag. While the branch cut `vX.Y.Z-pre.<run>` and the entry named
-  `X.Y.Z`, no tag a branch cut ever named its own entry's version. Once the
-  entry names what is cut, the tag names the entry's version from the first
-  candidate on, and every push after it was a finding on the one branch whose
-  purpose is to cut them.
-
 ### Added
 
 - **`unreadable-version`, a check of its own for an entry heading naming no
@@ -34,15 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   described from the wrong entry. It is the split `undated-entry` and
   `undated-release` made, for the same reason. Sixteen checks.
 
-- **The `release-branch` example cuts its tag in a job of its own**, so a test
-  job has somewhere to attach. Every push to a release branch publishes and a
-  push arrives without a pull request, so nothing gates it the way branch
-  protection gates a merge to the trunk — and with the cut as a step there was
-  no job boundary a `needs:` could be inserted at, so the shape resisted the fix
-  rather than merely omitting it. The example still carries no test job, because
-  these demonstrate the action rather than a whole pipeline; it names where one
-  goes. Both files now keep `contents: read` at the top and grant
-  `contents: write` on the tag job alone.
 
 - **`oci-incompatible-version`, for a version that is valid Semantic Versioning
   and cannot be an OCI tag**, at `error` and switchable off. The specification
@@ -127,22 +102,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **The `release-branch` example cuts the version its changelog names, and
-  composes nothing.** It derived a pre-release tag from `github.run_number` and
-  from the branch name's last hyphenated segment, and both were wrong: the run
-  number counts a workflow file's runs and resets when the file is renamed, and
-  `${GITHUB_REF_NAME##*-}` returns the whole ref on a branch carrying no hyphen,
-  so `main` composed the legal and meaningless `v1.3.0-main.7`. Neither is
-  repaired, because composing at all contradicted this action's thesis that
-  everything downstream follows from the document. Writing `1.3.0-rc.2` in the
-  heading is what cuts `v1.3.0-rc.2`; the branch and trunk invocations are the
-  same two guards with `prerelease` inverted; and a push that changes no version
-  cuts nothing, where the run number cut a candidate on every push.
-- `prerelease-entry` moves to the trunk invocation alone. A candidate is a
-  heading under this strategy now, so raising it on the branch or on pull
-  requests would refuse the shape the strategy is built on. The cost is that the
-  check judges the whole document, so the branch cannot report a stale candidate
-  below the newest entry either.
+- **`undated-release` no longer fires where the tag naming the newest entry is a
+  candidate.** The check split on whether *a* tag already named the entry's
+  version, read as *the release shipped*. That reading is sound for a final and
+  false for a pre-release: a candidate ships its tag and stays undated on
+  purpose, which is what a stabilization branch is for. It fires on a **final**
+  tag now, and a candidate falls through to `undated-entry`, which is the check
+  such a branch already switches off.
+- The defect was unreachable until the `release-branch` example stopped
+  composing its tag. While the branch cut `vX.Y.Z-pre.<run>` and the entry named
+  `X.Y.Z`, no tag a branch cut ever named its own entry's version. Once the
+  entry names what is cut, the tag names the entry's version from the first
+  candidate on, and every push after it was a finding on the one branch whose
+  purpose is to cut them.
+
+
+- **The `release-branch` example teaches what the strategy's own adopter
+  settled on: the changelog names the release it is heading for and never an
+  attempt at one.** The entry says `1.3.0` from the moment the branch opens; each
+  pull request into that branch cuts a numbered candidate, `v1.3.0-rc.1` and up;
+  merging to the trunk dates the entry and cuts `v1.3.0`. A heading therefore
+  never carries an identifier, and `prerelease-entry` is raised on **every**
+  invocation rather than on the trunk alone.
+- **A release branch has no push trigger.** A candidate comes from a pull request
+  into the branch, which is what lets the suite stand in front of it: the cut is
+  a job with `needs: [changelog, suite]`, and `needs:` is job-level, so a step
+  had no boundary a gate could attach to. The two cutting workflows also carry
+  `paths: [CHANGELOG.md]`, so a change proposing no release starts no run at all.
+- **The workflows are named for what each run yields**, not for what triggers it:
+  `ci`, `release-candidate`, `release`, `publish`, and the `suite` they call.
+  Read that list and it is the strategy. It replaces `pull-request.yaml`,
+  `release-branch.yaml` and `main.yaml`, whose names described their triggers and,
+  in one case, described the wrong thing.
 - Where the newest entry's heading names no version that can be read, `version`
   and `notes` report nothing rather than describing the entry below it. That
   entry was being read as the newest, so a workflow reading those cut a tag for

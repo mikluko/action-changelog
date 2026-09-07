@@ -1,0 +1,37 @@
+name: ci
+run-name: 🔍 CI
+
+# Every pull request, whatever it targets. Reads the document and runs the
+# suite; cuts nothing.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The tag-dependent checks read the tag history, and a default
+          # checkout carries none.
+          fetch-depth: 0
+      - uses: mikluko/action-changelog@v1
+        with:
+          sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
+          # A candidate is a tag this strategy composes, never a heading, so an
+          # identifier in the document is a mistake wherever it appears.
+          error: prerelease-entry
+          # undated-entry fires only where the newest *versioned* entry carries
+          # no date, which is exactly a release in flight. A pull request is
+          # where you see one before it lands, so it is not a defect here.
+          # release.yaml keeps the check at its default, which is where an
+          # entry reaching the trunk undated is refused.
+          #
+          # Quoted because YAML 1.1 reads a bare off as false.
+          "off": undated-entry
+
+  suite:
+    uses: ./.github/workflows/suite.yaml

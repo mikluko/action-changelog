@@ -272,11 +272,11 @@ entry names a version and a date, a push to the trunk finds that version
 untagged, and the tag is cut. One branch, one ceremony.
 
 [`release-branch/`](examples/release-branch/) opens a release on a branch of its
-own. The entry names a version and carries no date while the branch accumulates,
-`undated-entry` is switched off there and nowhere else, the version that entry
-names is the tag it cuts — candidate identifier and all, so writing `1.3.0-rc.2`
-in the heading is what cuts `v1.3.0-rc.2` — and merging to the trunk dates the
-entry and cuts the final tag.
+own. The entry names the version it is heading for and carries no date while the
+branch accumulates, every pull request into that branch cuts a numbered
+candidate — `v1.3.0-rc.1`, `v1.3.0-rc.2` — and merging to the trunk dates the
+entry and cuts `v1.3.0`. The document names the release; the machine numbers the
+attempts, so a heading never carries an identifier.
 
 `go test ./...` validates both trees under the inputs their workflows carry, so
 the examples are executed rather than described.
