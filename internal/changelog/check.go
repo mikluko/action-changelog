@@ -122,7 +122,7 @@ var Checks = []Check{
 	},
 	{
 		Name:        CheckDuplicateSection,
-		Description: "A level-3 heading names no section that another one under the same entry already named.",
+		Description: "A level-3 heading names no section that another one under the same entry already named. Silent on an entry the reference tag has frozen, whose repair release-entry-modified forbids.",
 		Default:     Error,
 	},
 	{

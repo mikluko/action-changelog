@@ -257,6 +257,113 @@ func TestUndatedCandidateIsSilentOnAStabilizationBranch(t *testing.T) {
 	}
 }
 
+// frozenDuplicate carries two Added sections under 0.2.0 and is what the tag
+// recorded, so the repair duplicate-section would ask for is the edit
+// release-entry-modified refuses.
+const frozenDuplicate = `# Changelog
+
+## [0.2.0] - 2026-02-01
+
+### Added
+
+- The second thing.
+
+### Added
+
+- Another second thing.
+
+## [0.1.0] - 2026-01-01
+
+### Added
+
+- The first thing.
+`
+
+// openDuplicate carries the same shape above the tag, where anyone may still
+// edit it.
+const openDuplicate = `# Changelog
+
+## [0.3.0] - 2026-03-01
+
+### Added
+
+- The third thing.
+
+### Added
+
+- Another third thing.
+
+## [0.2.0] - 2026-02-01
+
+### Added
+
+- The second thing.
+
+## [0.1.0] - 2026-01-01
+
+### Added
+
+- The first thing.
+`
+
+// backfilledDuplicate carries an entry the tag never recorded, which immutable
+// admits as a repair rather than a rewrite.
+const backfilledDuplicate = tagged + `
+## [0.0.9] - 2025-12-01
+
+### Fixed
+
+- An old thing.
+
+### Fixed
+
+- Another old thing.
+`
+
+// A finding is a thing to go and fix, so duplicate-section is raised only where
+// a fix is legal. On a frozen entry both moves fail: repairing the duplicate
+// rewrites notes a tag published, and leaving it keeps the run red, so the two
+// checks between them would describe a document that cannot exist.
+func TestDuplicateSectionSpares_FrozenEntries(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		doc  string
+		git  *changelog.Git
+		want []string
+	}{
+		{
+			name: "the tag recorded the duplicate, so nobody may repair it",
+			doc:  frozenDuplicate,
+			git:  &changelog.Git{ReferenceTag: "v0.2.0", TaggedChangelog: []byte(frozenDuplicate)},
+		},
+		{
+			name: "an entry above the tag is still being written",
+			doc:  openDuplicate,
+			git:  &changelog.Git{ReferenceTag: "v0.2.0", TaggedChangelog: []byte(tagged)},
+			want: []string{changelog.CheckDuplicateSection},
+		},
+		{
+			name: "an entry the tag never carried is a repair, not history",
+			doc:  backfilledDuplicate,
+			git:  &changelog.Git{ReferenceTag: "v0.2.0", TaggedChangelog: []byte(tagged)},
+			want: []string{changelog.CheckDuplicateSection},
+		},
+		{
+			name: "no repository offered freezes nothing, and immutable runs on nothing either",
+			doc:  frozenDuplicate,
+			git:  nil,
+			want: []string{changelog.CheckDuplicateSection},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := checks(changelog.Parse([]byte(tc.doc)).Lint(changelog.Options{Git: tc.git}))
+			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Errorf("checks fired %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // prereleased is the tagged document with a release candidate above the release
 // it became.
 const prereleased = `# Changelog
