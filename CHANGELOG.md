@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-10
+
+### Added
+
+- **`duplicate-section`, for a level-3 heading repeating a name another section
+  under the same entry already carries**, at `error`. `unknown-section` holds
+  each heading to the vocabulary but never compares one to another, so two
+  `### Added` headings under one entry parsed clean, each with its own list
+  below it. That is the shape a rebase leaves where it replays a bullet into an
+  entry already carrying the section it belongs under. Nineteen checks.
+
 ## [1.2.0] - 2026-09-07
 
 ### Added
@@ -263,7 +274,8 @@ recorded separately: nothing consumed them but this repository.
   candidate can be pulled and tested before it merges, and one reaching `main`
   is refused rather than published.
 
-[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/mikluko/action-changelog/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/mikluko/action-changelog/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mikluko/action-changelog/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/mikluko/action-changelog/compare/v1.0.1...v1.0.2

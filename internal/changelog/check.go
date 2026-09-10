@@ -51,6 +51,7 @@ const (
 	CheckVersionOrder      = "version-order"
 	CheckEmptyEntry        = "empty-entry"
 	CheckUnknownSection    = "unknown-section"
+	CheckDuplicateSection  = "duplicate-section"
 	CheckDateOrder         = "date-order"
 	CheckDateFuture        = "date-future"
 	CheckDateMismatch      = "date-mismatch"
@@ -117,6 +118,11 @@ var Checks = []Check{
 	{
 		Name:        CheckUnknownSection,
 		Description: "A level-3 heading is one of the accepted section vocabulary.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckDuplicateSection,
+		Description: "A level-3 heading names no section that another one under the same entry already named.",
 		Default:     Error,
 	},
 	{
