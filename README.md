@@ -142,7 +142,7 @@ annotation, and which is what `error`, `warn` and `off` take.
 | `version-order` | `error` | Entries run newest first, each version strictly below the one above it. |
 | `empty-entry` | `error` | A released entry carries something under it. |
 | `unknown-section` | `error` | A level-3 heading is one of the accepted section vocabulary. |
-| `duplicate-section` | `error` | A level-3 heading names no section that another one under the same entry already named. |
+| `duplicate-section` | `error` | A level-3 heading names no section that another one under the same entry already named. Silent on an entry the reference tag has frozen, whose repair release-entry-modified forbids. |
 | `date-order` | `error` | Entry dates run newest first, matching the version order above them. |
 | `date-future` | `error` | No entry is dated later than today. |
 | `date-mismatch` | `error` | A released entry's date is the day its tag was cut. Silent for an entry no tag names, which is a release pending rather than a date that disagrees. |

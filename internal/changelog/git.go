@@ -77,6 +77,25 @@ func (g *Git) tag(e Entry) string {
 	return best
 }
 
+// frozen is the set of versions the reference tag's changelog already carried,
+// which is the set immutable refuses to let anyone edit. Reading a nil map
+// answers false, so a caller need not distinguish it from an empty one.
+//
+// A check whose only remedy is an edit says nothing about these entries. The
+// edit would be one release-entry-modified forbids, so raising the finding asks
+// for a document that cannot exist: fixing it and leaving it both fail, and the
+// repository has no move that turns the run green.
+func (g *Git) frozen() map[string]bool {
+	if g == nil || g.Err != nil || len(g.TaggedChangelog) == 0 {
+		return nil
+	}
+	out := make(map[string]bool)
+	for _, e := range Parse(g.TaggedChangelog).Released() {
+		out[e.Version] = true
+	}
+	return out
+}
+
 // git runs the checks that read the repository rather than the document.
 //
 // A history that could not be read stops the rest: version-behind-tag and the

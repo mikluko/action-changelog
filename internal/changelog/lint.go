@@ -85,6 +85,7 @@ func (c *Changelog) Lint(opts Options) []Finding {
 	f := findings{severities: severities}
 
 	linked := anyLinkRef(c.Entries)
+	frozen := opts.Git.frozen()
 	asOf := today()
 	// An entry with no date is one of two things and a final tag naming it
 	// tells them apart: a release still being written, or a release that
@@ -175,7 +176,7 @@ func (c *Changelog) Lint(opts Options) []Finding {
 			if !allowed[s.Name] {
 				f.add(CheckUnknownSection, s.Line, "section %q is not one of %v", s.Name, sections)
 			}
-			if seen[s.Name] {
+			if seen[s.Name] && !frozen[e.Version] {
 				f.add(CheckDuplicateSection, s.Line, "section %q appears more than once under this entry", s.Name)
 			}
 			seen[s.Name] = true

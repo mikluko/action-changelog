@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-10
+
+### Fixed
+
+- **`duplicate-section` says nothing about an entry the reference tag has
+  frozen.** Shipped at `error` in 1.3.0, it fired on released entries whose
+  repair `release-entry-modified` forbids, and between them the two checks
+  described a document that cannot exist: removing the duplicate rewrites notes
+  a tag published, and leaving it keeps the run red. A repository carrying one
+  anywhere in its history had no move that turned the run green.
+
+  The set spared is the one `immutable` already refuses to let anyone edit, so
+  the two agree by construction rather than by a rule stated twice and kept in
+  step by hand. An entry the tag never carried is checked as before:
+  backfilling history nobody recorded is a repair, and a repair may be edited.
+
 ## [1.3.0] - 2026-09-10
 
 ### Added
@@ -274,7 +290,8 @@ recorded separately: nothing consumed them but this repository.
   candidate can be pulled and tested before it merges, and one reaching `main`
   is refused rather than published.
 
-[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/mikluko/action-changelog/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/mikluko/action-changelog/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/mikluko/action-changelog/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mikluko/action-changelog/compare/v1.0.2...v1.1.0
