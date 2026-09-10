@@ -170,10 +170,15 @@ func (c *Changelog) Lint(opts Options) []Finding {
 			}
 			prev = e
 		}
+		seen := make(map[string]bool, len(e.Sections))
 		for _, s := range e.Sections {
 			if !allowed[s.Name] {
 				f.add(CheckUnknownSection, s.Line, "section %q is not one of %v", s.Name, sections)
 			}
+			if seen[s.Name] {
+				f.add(CheckDuplicateSection, s.Line, "section %q appears more than once under this entry", s.Name)
+			}
+			seen[s.Name] = true
 		}
 	}
 	f.git(c, opts.Git)

@@ -105,6 +105,17 @@ func TestLintFindings(t *testing.T) {
 			`section "Improved" is not one of`,
 		},
 		{
+			"same section twice under one entry",
+			[]string{
+				"# Changelog", "",
+				"## [1.0.0] - 2026-08-01", "",
+				"### Added", "", "- a thing", "",
+				"### Added", "", "- another",
+			},
+			CheckDuplicateSection,
+			`section "Added" appears more than once`,
+		},
+		{
 			"date increases going down the file",
 			[]string{
 				"# Changelog", "",

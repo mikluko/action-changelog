@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`duplicate-section`, for a level-3 heading repeating a name another section
+  under the same entry already carries**, at `error`. `unknown-section` holds
+  each heading to the vocabulary but never compares one to another, so two
+  `### Added` headings under one entry parsed clean, each with its own list
+  below it. That is the shape a rebase leaves where it replays a bullet into an
+  entry already carrying the section it belongs under. Nineteen checks.
+
 ## [1.2.0] - 2026-09-07
 
 ### Added
