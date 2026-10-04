@@ -4,14 +4,25 @@ Reads a [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) document and
 reports where it departs from the format. Each finding is emitted as a workflow
 annotation, so a failing check lands on the offending line of the diff.
 
+## Usage
+
 ```yaml
+- uses: actions/checkout@v5
+  with:
+    fetch-depth: 0
 - uses: mikluko/action-changelog@v1
   with:
     changelog: CHANGELOG.md
 ```
 
+`fetch-depth: 0` brings the tags the action compares the changelog against. A
+default checkout is shallow and carries none, and `no-git-tags` fires.
+
 A Docker container action, so it runs on Linux runners. It reaches the network
 only to pull its own image.
+
+[`examples/`](examples/) carries complete workflows for
+[two release strategies](#two-worked-policies).
 
 ## Why
 
@@ -30,6 +41,8 @@ It performs no release itself. It reports what it found, and the ceremony
 belongs downstream, to whatever automation consumes that metadata.
 
 ## Inputs
+
+Every input is optional.
 
 | Input | Default | Description |
 |---|---|---|
@@ -194,9 +207,9 @@ means for any particular arrangement is the reader's to judge.
 A version heading is read as Semantic Versioning 2.0.0 exactly: three
 components, no shorthand, no leading `v`.
 
-| heading | | |
+| Heading | Reading | Reason |
 |---|---|---|
-| `## [1.2.3] - 2026-01-01` | accepted | |
+| `## [1.2.3] - 2026-01-01` | accepted | three numeric components |
 | `## [1.2.3-rc.1] - 2026-01-01` | accepted | a pre-release is a version |
 | `## [1.2.3+build.1] - 2026-01-01` | accepted | build metadata is valid SemVer |
 | `## [1.2]` | rejected | a version states all three components |
@@ -326,9 +339,26 @@ the examples are executed rather than described.
 
 ## Local use
 
+The action is a Go command, and every input is a flag of the same name.
+
+To validate `CHANGELOG.md` in the current directory:
+
 ```
 go run github.com/mikluko/action-changelog@latest
-go run github.com/mikluko/action-changelog@latest -changelog docs/CHANGELOG.md
+```
+
+Findings go to stderr and the [outputs](#outputs) to stdout. The exit status is
+1 where a finding reaches `-fail-on`.
+
+To validate a changelog elsewhere, where `<path>` is its path:
+
+```
+go run github.com/mikluko/action-changelog@latest -changelog <path>
+```
+
+To print the checks and their default severities:
+
+```
 go run github.com/mikluko/action-changelog@latest -list-checks
 ```
 
