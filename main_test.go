@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -374,6 +375,8 @@ func TestOutputsDescribeTheNewestEntry(t *testing.T) {
 		"notes":          "### Added\n\n- a thing\n- another",
 		"already-tagged": "false",
 		"latest-tag":     "1.0.0",
+		"due":            "true",
+		"due-reason":     "",
 	}
 	for name, value := range want {
 		if got[name] != value {
@@ -392,6 +395,73 @@ func TestOutputsDescribeTheNewestEntry(t *testing.T) {
 	if got["latest-tag"] != "v1.1.0" {
 		t.Errorf("latest-tag is %q, want v1.1.0", got["latest-tag"])
 	}
+	if got["due"] != "false" || got["due-reason"] != "1.1.0 is already tagged" {
+		t.Errorf("due is %q and due-reason %q with v1.1.0 cut", got["due"], got["due-reason"])
+	}
+}
+
+// due is the three guards a cutting workflow would otherwise spell in shell, so
+// each is held to the sentence it gives, and to the order they are asked in.
+func TestNotDueNamesTheGuardThatFailed(t *testing.T) {
+	const (
+		final     = "# Changelog\n\n## [1.1.0] - 2026-02-01\n\n### Added\n\n- a thing\n"
+		candidate = "# Changelog\n\n## [1.1.0-rc.1] - 2026-02-01\n\n### Added\n\n- a thing\n"
+		unnamed   = "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- a thing\n"
+	)
+	tags := func(names ...string) repoState {
+		var out repoState
+		for _, n := range names {
+			out.Tags = append(out.Tags, git.Tag{Name: n})
+		}
+		return out
+	}
+	unread := repoState{Check: &changelog.Git{Err: errors.New("the checkout is shallow")}}
+
+	for _, tc := range []struct {
+		name       string
+		doc        string
+		repo       repoState
+		prerelease bool
+		want       string
+	}{
+		{"an untagged final version", final, tags("v1.0.0"), false, ""},
+		{"no version", unnamed, tags("v1.0.0"), false, "the changelog names no version"},
+		{"tagged", final, tags("v1.0.0", "v1.1.0"), false, "1.1.0 is already tagged"},
+		{"tagged without the v", final, tags("1.1.0"), false, "1.1.0 is already tagged"},
+		{"a pre-release", candidate, tags("v1.0.0"), false, "1.1.0-rc.1 is a pre-release"},
+		{"a pre-release admitted", candidate, tags("v1.0.0"), true, ""},
+		{"a pre-release admitted and tagged", candidate, tags("v1.1.0-rc.1"), true, "1.1.0-rc.1 is already tagged"},
+		{"tags nothing read", final, unread, false, "the repository's tags cannot be read: the checkout is shallow"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := notDue(changelog.Parse([]byte(tc.doc)), tc.repo, tc.prerelease); got != tc.want {
+				t.Errorf("the reason is %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSummarizeWritesTheReasonAndNothingWhereDue(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "summary")
+	t.Setenv("GITHUB_STEP_SUMMARY", path)
+
+	if err := summarize(""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("a release that is due wrote a summary: %v", err)
+	}
+
+	if err := summarize("1.1.0 is already tagged"); err != nil {
+		t.Fatal(err)
+	}
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(src) != "1.1.0 is already tagged\n" {
+		t.Errorf("the summary holds %q", src)
+	}
 }
 
 // Validation answers whatever the document holds, so a file naming no version
@@ -407,6 +477,9 @@ func TestOutputsOfADocumentNamingNoVersion(t *testing.T) {
 	}
 	if got["valid"] != "true" || got["already-tagged"] != "false" {
 		t.Errorf("valid is %q and already-tagged %q", got["valid"], got["already-tagged"])
+	}
+	if got["due"] != "false" || got["due-reason"] != "the changelog names no version" {
+		t.Errorf("due is %q and due-reason %q", got["due"], got["due-reason"])
 	}
 }
 
@@ -481,7 +554,7 @@ func TestAnUnreadableHeadingBelowTheNewestEntry(t *testing.T) {
 	}
 
 	got := map[string]string{}
-	for _, o := range outputs(parsed, nil, "", findings) {
+	for _, o := range outputs(parsed, repoState{}, findings, "") {
 		got[o.Name] = o.Value
 	}
 	if got["version"] != "1.2.0" {
@@ -533,7 +606,7 @@ func emittedWith(t *testing.T, path string, repo repoState, sev changelog.Severi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := emit(outputs(doc, repo.Tags, repo.Reference, findings), &log); err != nil {
+	if err := emit(outputs(doc, repo, findings, notDue(doc, repo, false)), &log); err != nil {
 		t.Fatal(err)
 	}
 

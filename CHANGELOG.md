@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`due` and `due-reason` outputs.** `due` is `true` when the newest entry
+  names a version, no tag names it, and it is not a pre-release; `due-reason` is
+  one sentence for the `false` case, also written to the step summary.
+- **`due-prerelease` input**, default `false`, which lets a pre-release count as
+  due.
+
 ## [1.3.1] - 2026-09-10
 
 ### Fixed

@@ -40,6 +40,7 @@ belongs downstream, to whatever automation consumes that metadata.
 | `off` | *(empty)* | Comma-separated checks to switch off. |
 | `fail-on` | `error` | What turns the step red: `error`, `warning`, or `never`. |
 | `reference-tags` | `final` | Which tags may be the reference tag: `final`, or `all` to admit pre-releases. |
+| `due-prerelease` | `false` | Whether a pre-release counts as a release that is due: `true` or `false`. |
 
 `Breaking` is not in the default vocabulary. Keep a Changelog 2.0.0 marks a
 breaking change inline as `**Breaking:**` inside the section it belongs to;
@@ -94,6 +95,8 @@ than to fetch anything.
 | `already-tagged` | `false` | Whether a tag naming `version` already exists. |
 | `prerelease` | `false` | Whether `version` carries a pre-release part, as in `1.2.3-rc1`. |
 | `latest-tag` | `v1.2.2` | The reference tag, as the repository spells it. |
+| `due` | `true` | Whether the newest entry is a release to cut. |
+| `due-reason` | `1.2.3 is already tagged` | One sentence saying why `due` is `false`. Empty while it is `true`. |
 
 Every output is something the action read. None of them proposes a tag: how a
 repository spells its tags belongs to whatever cuts them, so a workflow wanting
@@ -118,8 +121,26 @@ so a repository tagging `1.2.3` is read the same as one tagging `v1.2.3`.
 the reference alone, so a release cut as a pre-release still reports `true` for
 the entry naming it.
 
-A document naming no version is still validated: `valid` and `already-tagged`
-answer, and `version` and `notes` are empty. A document whose newest entry
+`due` is `true` when the newest entry names a version, no tag names that
+version, and it is not a pre-release; `due-prerelease: true` lets a pre-release
+count. Where it is `false`, `due-reason` says which of those failed and the same
+sentence is written to the step summary. It is also `false` where the
+repository's tags cannot be read, because no tag seen is not the same as no tag.
+It says nothing about `valid`: under `fail-on: never` a workflow reads both.
+
+```yaml
+- id: changelog
+  uses: mikluko/action-changelog@v1
+- if: steps.changelog.outputs.due == 'true'
+  env:
+    VERSION: ${{ steps.changelog.outputs.version }}
+  run: |
+    git tag "v$VERSION"
+    git push origin "refs/tags/v$VERSION"
+```
+
+A document naming no version is still validated: `valid`, `already-tagged` and
+`due` answer, and `version` and `notes` are empty. A document whose newest entry
 carries a heading naming no version that can be read answers the same way, and
 `unreadable-version` reports that heading: nothing under it is the newest entry,
 so no output describes the entry below it.

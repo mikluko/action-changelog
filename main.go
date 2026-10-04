@@ -31,6 +31,7 @@ func main() {
 		asOff      = flag.String("off", "", "comma-separated checks to switch off")
 		failOn     = flag.String("fail-on", "error", "exit non-zero on error, warning, or never")
 		refTags    = flag.String("reference-tags", "final", "which tags may be the reference tag: final or all")
+		duePre     = flag.Bool("due-prerelease", false, "let a pre-release count as a release that is due")
 		listChecks = flag.Bool("list-checks", false, "print the checks and their default severities")
 	)
 	flag.Parse()
@@ -62,7 +63,11 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	if err := emit(outputs(doc, repo.Tags, repo.Reference, findings), os.Stdout); err != nil {
+	reason := notDue(doc, repo, *duePre)
+	if err := emit(outputs(doc, repo, findings, reason), os.Stdout); err != nil {
+		fail(err)
+	}
+	if err := summarize(reason); err != nil {
 		fail(err)
 	}
 	if red(findings, threshold) {
@@ -193,9 +198,52 @@ func state(path string, admit git.Eligible) repoState {
 	return out
 }
 
+// notDue returns the one sentence saying why the newest entry is not a release
+// to cut, or "" where it is one: it names a version, no tag names that version,
+// and it is not a pre-release unless prerelease admits one.
+//
+// A tag history that could not be read is a reason: no tag was seen naming the
+// version, which is not evidence that none does.
+func notDue(doc *changelog.Changelog, repo repoState, prerelease bool) string {
+	latest, ok := doc.Latest()
+	if !ok {
+		return "the changelog names no version"
+	}
+	version := latest.Semver.String()
+	if latest.Semver.Prerelease() && !prerelease {
+		return version + " is a pre-release"
+	}
+	if repo.Check != nil && repo.Check.Err != nil {
+		return fmt.Sprintf("the repository's tags cannot be read: %v", repo.Check.Err)
+	}
+	if tagged(repo.Tags, latest.Semver.Canonical().Tag()) {
+		return version + " is already tagged"
+	}
+	return ""
+}
+
+// summarize appends reason to the step summary, where the runner named one and
+// there is a reason to give.
+func summarize(reason string) error {
+	path := os.Getenv("GITHUB_STEP_SUMMARY")
+	if path == "" || reason == "" {
+		return nil
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(f, reason); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}
+
 // outputs is what a consuming workflow reads: the verdict, the version the
 // newest entry names, that entry's body, whether a tag naming the version
-// exists, and the reference tag as the repository spells it.
+// exists, the reference tag as the repository spells it, and whether a release
+// is due, which is notDue's reason being empty.
 //
 // Every value is something the run read. None is a spelling this command chose:
 // how a repository writes its tags belongs to whatever cuts them, so a consumer
@@ -204,7 +252,7 @@ func state(path string, admit git.Eligible) repoState {
 // A document naming no version still answers, with version and notes empty,
 // which is what keeps the verdict independent of whether anything is
 // releasable.
-func outputs(doc *changelog.Changelog, tags []git.Tag, reference string, findings []changelog.Finding) []output.Output {
+func outputs(doc *changelog.Changelog, repo repoState, findings []changelog.Finding, reason string) []output.Output {
 	var version, notes, want string
 	var prerelease bool
 	if latest, ok := doc.Latest(); ok {
@@ -216,13 +264,15 @@ func outputs(doc *changelog.Changelog, tags []git.Tag, reference string, finding
 		{Name: "valid", Value: strconv.FormatBool(valid(findings))},
 		{Name: "version", Value: version},
 		{Name: "notes", Value: notes},
-		{Name: "already-tagged", Value: strconv.FormatBool(tagged(tags, want))},
-		{Name: "latest-tag", Value: reference},
+		{Name: "already-tagged", Value: strconv.FormatBool(tagged(repo.Tags, want))},
+		{Name: "latest-tag", Value: repo.Reference},
 		// A fact about the newest entry, where the prerelease-entry check is a
 		// judgement about the whole document. A workflow gating on what it is
 		// about to release wants the fact: the check also fires on entries long
 		// since released, which never stop being pre-releases.
 		{Name: "prerelease", Value: strconv.FormatBool(prerelease)},
+		{Name: "due", Value: strconv.FormatBool(reason == "")},
+		{Name: "due-reason", Value: reason},
 	}
 }
 
