@@ -14,7 +14,7 @@ on:
     paths:
       - CHANGELOG.md
 
-# Not cancelled: a run may be part-way through pushing a tag.
+# Not canceled: a run may be part-way through pushing a tag.
 concurrency:
   group: ${{ github.workflow }}/${{ github.ref }}
   cancel-in-progress: false

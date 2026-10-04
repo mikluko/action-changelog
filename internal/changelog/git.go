@@ -61,7 +61,7 @@ func (g *Git) tag(e Entry) string {
 	// "v1.0.0" it points at has two tags naming one version, and the release
 	// was cut at the fuller one: the shorter moves to the next release, so its
 	// date is when it last moved rather than when anything shipped.
-	best, spelt := "", 0
+	best, spelled := "", 0
 	for _, name := range g.Tags {
 		// Compare rather than string equality, so build metadata is ignored on
 		// both sides the way section 10 says it is: a tag cannot carry a "+" at
@@ -70,8 +70,8 @@ func (g *Git) tag(e Entry) string {
 		if err != nil || semver.Compare(t, e.Semver) != 0 {
 			continue
 		}
-		if n := semver.TagComponents(name); n > spelt {
-			best, spelt = name, n
+		if n := semver.TagComponents(name); n > spelled {
+			best, spelled = name, n
 		}
 	}
 	return best

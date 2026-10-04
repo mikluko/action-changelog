@@ -68,7 +68,7 @@ func (t Tag) Version() string {
 //
 // The day is taken in the tag's own timezone and not in UTC. A changelog date
 // is a bare calendar day, and what it means is the day the human cut the
-// release; normalising a tag cut at 23:30-07:00 to UTC moves it to the next day
+// release; normalizing a tag cut at 23:30-07:00 to UTC moves it to the next day
 // and reports a correct entry as wrong.
 func (r *Repo) TagDay(t Tag) (string, error) {
 	when, err := r.tagTime(t.Hash)

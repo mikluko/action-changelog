@@ -107,7 +107,7 @@ _Avoid_: rule, validator, lint (which is the whole reading)
 Every check the tool knows, each with its one-line description and the severity
 it carries unless a caller says otherwise. It is the single source: a check added
 to it needs no second declaration anywhere.
-_Avoid_: list, catalogue, ruleset
+_Avoid_: list, catalog, ruleset
 
 **Severity**:
 What a check's finding counts as: error, warning, or off. Off is not a quiet

@@ -367,7 +367,7 @@ func TestOpenReportsAGitFileNamingNothing(t *testing.T) {
 	}
 }
 
-// repo initialises an empty repository whose commits do not depend on the
+// repo initializes an empty repository whose commits do not depend on the
 // machine's git configuration.
 func repo(t *testing.T) string {
 	t.Helper()
@@ -511,7 +511,7 @@ func TestTagDayReadsBothTagKinds(t *testing.T) {
 }
 
 // The day is the tag's own, not UTC. A changelog date is a bare calendar day
-// meaning the day the human cut the release, and normalising these two to UTC
+// meaning the day the human cut the release, and normalizing these two to UTC
 // moves each onto the wrong side of a midnight.
 func TestTagDayIsInTheTagsOwnZone(t *testing.T) {
 	dir := repo(t)

@@ -104,7 +104,7 @@ a ref reads `latest-tag` and a workflow cutting a new one writes the spelling it
 has chosen.
 
 `prerelease` is a fact about the newest entry, where the `prerelease-entry`
-check is a judgement about the whole document. A workflow gating on what it is
+check is a judgment about the whole document. A workflow gating on what it is
 about to release wants the fact: the check also fires on entries released long
 ago, which never stop being pre-releases, so a repository that has ever shipped
 a candidate would fail that check forever.
@@ -216,13 +216,13 @@ Two departures from the specification are this project's own:
 ### `golang.org/x/mod/semver`
 
 Its package documentation declares two deviations from Semantic Versioning
-2.0.0: it **requires a leading `v`**, and it recognises **`vMAJOR` and
+2.0.0: it **requires a leading `v`**, and it recognizes **`vMAJOR` and
 `vMAJOR.MINOR`** — with no pre-release or build suffix — as shorthands for
 `vMAJOR.0.0` and `vMAJOR.MINOR.0`. It describes itself as implementing
 *comparison* of version strings rather than validation.
 
 `Canonical` fills in a missing `.MINOR` or `.PATCH` and **discards build
-metadata**, so `v1.2.3+build.1` canonicalises to `v1.2.3`, and the package
+metadata**, so `v1.2.3+build.1` canonicalizes to `v1.2.3`, and the package
 documents that two versions compare equal only if their canonical forms are an
 identical string.
 

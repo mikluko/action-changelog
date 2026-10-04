@@ -1,6 +1,6 @@
 # The build stage stays on the builder's own architecture and cross-compiles,
 # rather than running under QEMU once per target. Go cross-compiles a static
-# binary for nothing, so emulation would buy an identical artefact at several
+# binary for nothing, so emulation would buy an identical artifact at several
 # minutes a platform.
 FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 

@@ -2,7 +2,7 @@
 //
 // The accepted set is the specification's. golang.org/x/mod/semver is not that
 // set and says so in its own package doc: it requires a leading "v" and
-// recognises "vMAJOR" and "vMAJOR.MINOR" as alternatives to the three-component
+// recognizes "vMAJOR" and "vMAJOR.MINOR" as alternatives to the three-component
 // form. Parse accepts neither, so a version this package reads is one the
 // specification's own suggested regular expression also matches.
 //

@@ -267,7 +267,7 @@ func outputs(doc *changelog.Changelog, repo repoState, findings []changelog.Find
 		{Name: "already-tagged", Value: strconv.FormatBool(tagged(repo.Tags, want))},
 		{Name: "latest-tag", Value: repo.Reference},
 		// A fact about the newest entry, where the prerelease-entry check is a
-		// judgement about the whole document. A workflow gating on what it is
+		// judgment about the whole document. A workflow gating on what it is
 		// about to release wants the fact: the check also fires on entries long
 		// since released, which never stop being pre-releases.
 		{Name: "prerelease", Value: strconv.FormatBool(prerelease)},

@@ -305,7 +305,7 @@ func TestAnUnreadableRepositoryFiresNoGitTags(t *testing.T) {
 	}
 }
 
-// fixture initialises an empty repository whose commits do not depend on the
+// fixture initializes an empty repository whose commits do not depend on the
 // machine's git configuration.
 func fixture(t *testing.T) string {
 	t.Helper()

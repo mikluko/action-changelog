@@ -6,7 +6,7 @@ copy, and a README explaining both. `go test ./...` validates every document
 under the inputs those workflows carry, so the examples are executed rather than
 described.
 
-Everything here is generic. No example names a repository, an organisation or a
+Everything here is generic. No example names a repository, an organization or a
 product.
 
 ## Which one
