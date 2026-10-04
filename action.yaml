@@ -42,6 +42,11 @@ inputs:
       the tag-dependent checks compare against and what latest-tag reports.
     required: false
     default: final
+  due-prerelease:
+    description: >-
+      Whether a pre-release counts as a release that is due: true or false.
+    required: false
+    default: "false"
 
 outputs:
   valid:
@@ -71,6 +76,16 @@ outputs:
       reference-tags admits. The previous release while `already-tagged` is
       false, and the release just cut once it is true. Empty when the checkout
       reaches no such tag.
+  due:
+    description: >-
+      Whether the newest entry is a release to cut: true when it names a
+      version, no tag names that version, and it is not a pre-release unless
+      due-prerelease admits one. False where the repository's tags cannot be
+      read. Says nothing about `valid`.
+  due-reason:
+    description: >-
+      One sentence saying why `due` is false, as in "1.2.3 is already tagged",
+      also written to the step summary. Empty while `due` is true.
 
 runs:
   using: docker
@@ -92,3 +107,4 @@ runs:
     - -off=${{ inputs['off'] }}
     - -fail-on=${{ inputs['fail-on'] }}
     - -reference-tags=${{ inputs['reference-tags'] }}
+    - -due-prerelease=${{ inputs['due-prerelease'] }}
