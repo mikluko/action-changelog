@@ -4,9 +4,8 @@ name: Release
 # tag cuts that release, and nothing else does: a tag pushed by hand is not a
 # path here, which is the thesis this action exists to serve.
 #
-# A release candidate is cut from the pull request instead, by the image job in
-# CI, so it can be pulled and tested before merging. One reaching main means a
-# candidate was merged rather than promoted, and this refuses it.
+# A pre-release reaching main means a candidate was merged rather than
+# promoted, and this refuses it.
 #
 # The refusal reads the prerelease output rather than raising the
 # prerelease-entry check, and the difference matters. The check fires on every
@@ -16,38 +15,32 @@ name: Release
 # released.
 #
 # One workflow rather than two, and that is forced rather than chosen. A tag
-# pushed with GITHUB_TOKEN does not trigger another workflow, so a job that cut
-# the tag and a separate job triggered by that tag would wait on each other
-# forever.
+# pushed with the automatic token does not trigger another workflow, so a job
+# that cut the tag and a separate job triggered by that tag would wait on each
+# other forever.
 on:
   push:
     branches: [main]
 
 permissions:
   contents: write
-  packages: write
-
-env:
-  IMAGE: ghcr.io/mikluko/action-changelog
-  CACHE: ghcr.io/mikluko/action-changelog:buildcache
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: https://github.com/actions/checkout@v5
         with:
           # The reference tag is the newest one reachable from HEAD, so the
           # history and the tags both have to be here.
           fetch-depth: 0
-      - uses: actions/setup-go@v6
+      - uses: https://github.com/actions/setup-go@v6
         with:
           go-version-file: go.mod
 
       # This repository consumes its own action, built from source rather than
-      # pulled. The image for the release being cut does not exist yet, and a
-      # published one would be the previous version reading this commit.
-      #
+      # downloaded. The binary for the release being cut does not exist yet,
+      # and a published one would be the previous version reading this commit.
       - name: Read the changelog
         id: changelog
         run: go run . -changelog CHANGELOG.md
@@ -62,10 +55,8 @@ jobs:
           TAGGED: ${{ steps.changelog.outputs.already-tagged }}
           PRERELEASE: ${{ steps.changelog.outputs.prerelease }}
         run: |
-          # A candidate is cut from its pull request. One here was merged rather
-          # than promoted, so this fails rather than quietly publishing it.
           if [ "$PRERELEASE" = true ]; then
-            echo "::error::the newest entry names $VERSION, a pre-release. Candidates are cut from the pull request; promote it to a final version before merging."
+            echo "::error::the newest entry names $VERSION, a pre-release. Promote it to a final version before merging."
             exit 1
           fi
           if [ "$VALID" != true ] || [ "$TAGGED" != false ] || [ -z "$VERSION" ]; then
@@ -74,44 +65,31 @@ jobs:
             exit 0
           fi
           echo "due=true" >>"$GITHUB_OUTPUT"
+          echo "version=$VERSION" >>"$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >>"$GITHUB_OUTPUT"
           echo "major=v${VERSION%%.*}" >>"$GITHUB_OUTPUT"
 
-      # The tag about to be cut and action.yaml's image reference are held to the
-      # changelog before anything is published, while backing out is still free.
+      # The tag about to be cut and the release action.yaml downloads are held
+      # to the changelog before anything is published, while backing out is
+      # still free.
       - name: Hold the tag and action.yaml to the changelog
         if: steps.cut.outputs.due == 'true'
         env:
           GITHUB_REF_NAME: ${{ steps.cut.outputs.tag }}
         run: go test -run TestVersionMatchesTheChangelog .
 
-      - uses: docker/setup-buildx-action@v3
+      # The asset names and the checksums.txt format are what action.yaml
+      # downloads and verifies.
+      - name: Build the binaries
         if: steps.cut.outputs.due == 'true'
-
-      - uses: docker/login-action@v3
-        if: steps.cut.outputs.due == 'true'
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # The image is published before the tag exists. action.yaml at that tag
-      # names this image, so a tag pointing at a commit whose image is missing
-      # would be a broken action to anyone resolving it in between.
-      #
-      # The layers are almost always the pull request's, pushed to the cache ref
-      # by the image job there, so this is a retag far more often than a build.
-      - uses: docker/build-push-action@v6
-        if: steps.cut.outputs.due == 'true'
-        with:
-          context: .
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: |
-            ${{ env.IMAGE }}:${{ steps.cut.outputs.tag }}
-            ${{ env.IMAGE }}:${{ steps.cut.outputs.major }}
-          cache-from: type=registry,ref=${{ env.CACHE }}
-          cache-to: type=registry,ref=${{ env.CACHE }},mode=max
+        run: |
+          dist="$RUNNER_TEMP/dist"
+          mkdir -p "$dist"
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            CGO_ENABLED=0 GOOS=${target%/*} GOARCH=${target#*/} \
+              go build -trimpath -ldflags='-s -w' -o "$dist/changelog_${target%/*}_${target#*/}" .
+          done
+          (cd "$dist" && sha256sum changelog_* >checksums.txt)
 
       - name: Cut the tag
         if: steps.cut.outputs.due == 'true'
@@ -126,12 +104,47 @@ jobs:
       - name: Publish the release
         if: steps.cut.outputs.due == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.cut.outputs.tag }}
           NOTES: ${{ steps.changelog.outputs.notes }}
         run: |
+          api="${GITHUB_API_URL:-$GITHUB_SERVER_URL/api/v1}/repos/$GITHUB_REPOSITORY"
           printf '%s\n' "$NOTES" >"$RUNNER_TEMP/notes.md"
-          gh release create "$TAG" --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
+          id=$(
+            jq -n --arg tag "$TAG" --rawfile body "$RUNNER_TEMP/notes.md" \
+              '{tag_name: $tag, name: $tag, body: $body}' |
+              curl -fsS -X POST "$api/releases" \
+                -H "Authorization: token $TOKEN" \
+                -H 'Content-Type: application/json' \
+                --data @- |
+              jq -er .id
+          )
+          for asset in "$RUNNER_TEMP"/dist/*; do
+            curl -fsS -o /dev/null -X POST "$api/releases/$id/assets?name=${asset##*/}" \
+              -H "Authorization: token $TOKEN" \
+              -F "attachment=@$asset"
+          done
+
+      # The action as a consumer runs it: action.yaml at this commit, with the
+      # binary downloaded from the release just published. It runs before the
+      # major tag moves, so a broken release never reaches the consumers that
+      # follow it.
+      - name: Run the published action
+        id: smoke
+        if: steps.cut.outputs.due == 'true'
+        uses: ./
+
+      - name: The published action reads the release just cut
+        if: steps.cut.outputs.due == 'true'
+        env:
+          WANT: ${{ steps.cut.outputs.version }}
+          VERSION: ${{ steps.smoke.outputs.version }}
+          TAGGED: ${{ steps.smoke.outputs.already-tagged }}
+        run: |
+          if [ "$VERSION" != "$WANT" ] || [ "$TAGGED" != true ]; then
+            echo "::error::the published action reports version=${VERSION:-none} already-tagged=$TAGGED, want $WANT and true"
+            exit 1
+          fi
 
       # Last, because it is the reference consumers follow and it should move
       # only once everything above it is in place. No pre-release reaches here,
