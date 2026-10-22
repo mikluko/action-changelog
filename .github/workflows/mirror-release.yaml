@@ -1,0 +1,75 @@
+name: Mirror release
+
+# This repository is a push mirror of https://forge.sarak.sh/actions/changelog,
+# where releases are cut. A version tag arriving here gets the Forgejo release's
+# notes and assets, so action.yaml downloads its binary from GitHub on GitHub
+# runners. Forgejo runs only .forgejo/workflows while that directory exists, so
+# this file runs on GitHub alone.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+env:
+  FORGEJO_API: https://forge.sarak.sh/api/v1/repos/actions/changelog
+  # The release workflow cuts the tag and then publishes the release and its
+  # assets, and the mirror can push the tag in between.
+  ATTEMPTS: 30
+  INTERVAL: 20
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for the Forgejo release
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          for attempt in $(seq "$ATTEMPTS"); do
+            if curl -fsS -o "$RUNNER_TEMP/release.json" "$FORGEJO_API/releases/tags/$TAG" &&
+              jq -e '[.assets[].name] | sort == [
+                  "changelog_darwin_amd64", "changelog_darwin_arm64",
+                  "changelog_linux_amd64", "changelog_linux_arm64",
+                  "checksums.txt"
+                ]' "$RUNNER_TEMP/release.json" >/dev/null; then
+              exit 0
+            fi
+            echo "attempt $attempt: the Forgejo release $TAG is not complete yet"
+            sleep "$INTERVAL"
+          done
+          echo "::error::the Forgejo release $TAG did not appear with its five assets in $((ATTEMPTS * INTERVAL))s"
+          exit 1
+
+      # checksums.txt is the release's own, so this catches a download cut
+      # short rather than a release tampered with.
+      - name: Download the assets
+        run: |
+          mkdir "$RUNNER_TEMP/dist"
+          cd "$RUNNER_TEMP/dist"
+          jq -r '.assets[] | [.name, .browser_download_url] | @tsv' "$RUNNER_TEMP/release.json" |
+            while IFS=$'\t' read -r name url; do
+              curl -fsSL --retry 3 -o "$name" "$url"
+            done
+          sha256sum -c checksums.txt
+          jq -r .body "$RUNNER_TEMP/release.json" >"$RUNNER_TEMP/notes.md"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [ "$(jq -r .prerelease "$RUNNER_TEMP/release.json")" = true ]; then
+            prerelease=--prerelease
+          else
+            prerelease=
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" $prerelease
+            gh release upload "$TAG" --clobber "$RUNNER_TEMP"/dist/*
+          else
+            gh release create "$TAG" --verify-tag --title "$TAG" \
+              --notes-file "$RUNNER_TEMP/notes.md" $prerelease "$RUNNER_TEMP"/dist/*
+          fi

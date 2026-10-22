@@ -53,15 +53,19 @@ outputs:
     description: >-
       Whether the document conforms: true when nothing was found at error
       severity. Reported whatever fail-on is set to.
+    value: ${{ steps.run.outputs.valid }}
   version:
     description: >-
       The version the newest entry names, as in 1.2.3. Empty where the document
       names no version, and where the newest entry's heading names one that
       cannot be read.
+    value: ${{ steps.run.outputs.version }}
   notes:
     description: The body of the newest entry, verbatim. Empty wherever version is.
+    value: ${{ steps.run.outputs.notes }}
   already-tagged:
     description: Whether a tag naming `version` already exists in the repository.
+    value: ${{ steps.run.outputs['already-tagged'] }}
   prerelease:
     description: >-
       Whether the version the newest entry names carries a pre-release part, as
@@ -69,6 +73,7 @@ outputs:
       a judgment about the whole document: this says nothing about entries
       already released, which never stop being pre-releases. False wherever
       version is empty.
+    value: ${{ steps.run.outputs.prerelease }}
   latest-tag:
     description: >-
       The reference tag, as the repository spells it, which is the ref a
@@ -76,35 +81,108 @@ outputs:
       reference-tags admits. The previous release while `already-tagged` is
       false, and the release just cut once it is true. Empty when the checkout
       reaches no such tag.
+    value: ${{ steps.run.outputs['latest-tag'] }}
   due:
     description: >-
       Whether the newest entry is a release to cut: true when it names a
       version, no tag names that version, and it is not a pre-release unless
       due-prerelease admits one. False where the repository's tags cannot be
       read. Says nothing about `valid`.
+    value: ${{ steps.run.outputs.due }}
   due-reason:
     description: >-
       One sentence saying why `due` is false, as in "1.2.3 is already tagged",
       also written to the step summary. Empty while `due` is true.
+    value: ${{ steps.run.outputs['due-reason'] }}
 
 runs:
-  using: docker
-  # The tag is the release this file was committed in, which is what
-  # TestVersionMatchesTheChangelog holds to the changelog's newest entry and to
-  # the tag being cut. A workflow pinning this action by SHA therefore runs the
-  # image built for the release that commit belongs to, with nothing rewritten
-  # after the fact.
-  image: docker://ghcr.io/mikluko/action-changelog:v1.4.0
-  # args is argv and never a shell line, so an input carrying a quote is one
-  # argument rather than the end of one.
-  args:
-    - -changelog=${{ inputs.changelog }}
-    - -sections=${{ inputs.sections }}
-    - -error=${{ inputs.error }}
-    - -warn=${{ inputs.warn }}
-    # Bracketed because a hyphen reads as subtraction in an expression, and
-    # off is a property name a dotted path is better off not spelling.
-    - -off=${{ inputs['off'] }}
-    - -fail-on=${{ inputs['fail-on'] }}
-    - -reference-tags=${{ inputs['reference-tags'] }}
-    - -due-prerelease=${{ inputs['due-prerelease'] }}
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      env:
+        # The release this file was committed in, which is what
+        # TestVersionMatchesTheChangelog holds to the changelog's newest entry
+        # and to the tag being cut. A workflow pinning this action by SHA
+        # therefore runs the binary built for the release that commit belongs
+        # to, with nothing rewritten after the fact.
+        VERSION: 1.5.0
+        OS: ${{ runner.os }}
+        ARCH: ${{ runner.arch }}
+        # The inputs reach the script through the environment and never
+        # through ${{ }} expansion, so an input carrying a quote is one
+        # argument rather than the end of one, and never a command.
+        INPUT_CHANGELOG: ${{ inputs.changelog }}
+        INPUT_SECTIONS: ${{ inputs.sections }}
+        INPUT_ERROR: ${{ inputs.error }}
+        INPUT_WARN: ${{ inputs.warn }}
+        # Bracketed because a hyphen reads as subtraction in an expression, and
+        # off is a property name a dotted path is better off not spelling.
+        INPUT_OFF: ${{ inputs['off'] }}
+        INPUT_FAIL_ON: ${{ inputs['fail-on'] }}
+        INPUT_REFERENCE_TAGS: ${{ inputs['reference-tags'] }}
+        INPUT_DUE_PRERELEASE: ${{ inputs['due-prerelease'] }}
+      run: |
+        case "$OS" in
+          Linux) os=linux ;;
+          macOS) os=darwin ;;
+          *) echo "::error::this action runs on Linux and macOS runners, not $OS"; exit 1 ;;
+        esac
+        case "$ARCH" in
+          X64) arch=amd64 ;;
+          ARM64) arch=arm64 ;;
+          *) echo "::error::this action runs on X64 and ARM64 runners, not $ARCH"; exit 1 ;;
+        esac
+        asset="changelog_${os}_${arch}"
+
+        # Both forges carry every release. Each runner asks its own first, and
+        # the other covers one that is unreachable or has not received the
+        # release yet.
+        forgejo="https://forge.sarak.sh/actions/changelog/releases/download/v$VERSION"
+        github="https://github.com/mikluko/action-changelog/releases/download/v$VERSION"
+        if [ "$GITHUB_SERVER_URL" = https://github.com ]; then
+          sources=("$github" "$forgejo")
+        else
+          sources=("$forgejo" "$github")
+        fi
+
+        dir=$(mktemp -d "$RUNNER_TEMP/changelog.XXXXXX")
+        fetched=
+        for source in "${sources[@]}"; do
+          if curl -fsSL --retry 3 -o "$dir/$asset" "$source/$asset" &&
+            curl -fsSL --retry 3 -o "$dir/checksums.txt" "$source/checksums.txt"; then
+            fetched=$source
+            break
+          fi
+          echo "could not download $asset $VERSION from $source"
+        done
+        if [ -z "$fetched" ]; then
+          echo "::error::could not download $asset $VERSION from any of ${sources[*]}"
+          exit 1
+        fi
+
+        sum=$(awk -v name="$asset" '$2 == name' "$dir/checksums.txt")
+        if [ -z "$sum" ]; then
+          echo "::error::$fetched/checksums.txt lists no $asset"
+          exit 1
+        fi
+        if command -v sha256sum >/dev/null; then
+          check=(sha256sum -c -)
+        else
+          check=(shasum -a 256 -c -)
+        fi
+        if ! (cd "$dir" && printf '%s\n' "$sum" | "${check[@]}" >/dev/null); then
+          echo "::error::$asset from $fetched does not match its checksum"
+          exit 1
+        fi
+        chmod +x "$dir/$asset"
+
+        exec "$dir/$asset" \
+          -changelog="$INPUT_CHANGELOG" \
+          -sections="$INPUT_SECTIONS" \
+          -error="$INPUT_ERROR" \
+          -warn="$INPUT_WARN" \
+          -off="$INPUT_OFF" \
+          -fail-on="$INPUT_FAIL_ON" \
+          -reference-tags="$INPUT_REFERENCE_TAGS" \
+          -due-prerelease="$INPUT_DUE_PRERELEASE"

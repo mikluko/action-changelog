@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-22
+
+### Changed
+
+- **A composite action that downloads a prebuilt static binary** from the
+  release's assets, verifies it against the release's `checksums.txt` and runs
+  it, rather than a Docker container action. It runs on Linux and macOS runners,
+  on X64 and ARM64, and needs no Docker. Inputs, outputs and behavior are
+  unchanged. No image is published for this release or later ones; the tags
+  before it keep theirs.
+- Developed at `https://forge.sarak.sh/actions/changelog`, which Forgejo
+  workflows reference as `https://forge.sarak.sh/actions/changelog@v1`.
+  `mikluko/action-changelog` on GitHub is its mirror and carries every release,
+  so a GitHub workflow referencing `mikluko/action-changelog@v1` resolves it as
+  before.
+
 ## [1.4.0] - 2026-10-04
 
 ### Added
@@ -300,7 +316,8 @@ recorded separately: nothing consumed them but this repository.
   candidate can be pulled and tested before it merges, and one reaching `main`
   is refused rather than published.
 
-[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/mikluko/action-changelog/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/mikluko/action-changelog/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/mikluko/action-changelog/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/mikluko/action-changelog/compare/v1.2.0...v1.3.0
