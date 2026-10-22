@@ -106,7 +106,7 @@ runs:
         # and to the tag being cut. A workflow pinning this action by SHA
         # therefore runs the binary built for the release that commit belongs
         # to, with nothing rewritten after the fact.
-        VERSION: 1.4.0
+        VERSION: 1.5.0
         OS: ${{ runner.os }}
         ARCH: ${{ runner.arch }}
         # The inputs reach the script through the environment and never
