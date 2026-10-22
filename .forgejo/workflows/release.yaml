@@ -110,15 +110,28 @@ jobs:
         run: |
           api="${GITHUB_API_URL:-$GITHUB_SERVER_URL/api/v1}/repos/$GITHUB_REPOSITORY"
           printf '%s\n' "$NOTES" >"$RUNNER_TEMP/notes.md"
-          id=$(
-            jq -n --arg tag "$TAG" --rawfile body "$RUNNER_TEMP/notes.md" \
-              '{tag_name: $tag, name: $tag, body: $body}' |
-              curl -fsS -X POST "$api/releases" \
-                -H "Authorization: token $TOKEN" \
-                -H 'Content-Type: application/json' \
-                --data @- |
-              jq -er .id
-          )
+          jq -n --arg tag "$TAG" --rawfile body "$RUNNER_TEMP/notes.md" \
+            '{tag_name: $tag, name: $tag, body: $body}' >"$RUNNER_TEMP/release.json"
+          # The pushed tag makes Forgejo record a release of its own for it,
+          # asynchronously. A request racing that record fails on the unique
+          # tag; once the record exists, the same request turns it into this
+          # release.
+          id=
+          for attempt in 1 2 3 4 5 6; do
+            if id=$(curl -fsS -X POST "$api/releases" \
+              -H "Authorization: token $TOKEN" \
+              -H 'Content-Type: application/json' \
+              --data @"$RUNNER_TEMP/release.json" | jq -er .id); then
+              break
+            fi
+            id=
+            echo "attempt $attempt: could not create the release for $TAG"
+            sleep 5
+          done
+          if [ -z "$id" ]; then
+            echo "::error::could not create the release for $TAG"
+            exit 1
+          fi
           for asset in "$RUNNER_TEMP"/dist/*; do
             curl -fsS -o /dev/null -X POST "$api/releases/$id/assets?name=${asset##*/}" \
               -H "Authorization: token $TOKEN" \
