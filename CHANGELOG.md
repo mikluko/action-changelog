@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A composite action that downloads a prebuilt static binary** from the
+  release's assets, verifies it against the release's `checksums.txt` and runs
+  it, rather than a Docker container action. It runs on Linux and macOS runners,
+  on X64 and ARM64, and needs no Docker. Inputs, outputs and behavior are
+  unchanged. No image is published for this release or later ones; the tags
+  before it keep theirs.
+- Developed at `https://forge.sarak.sh/actions/changelog`, which Forgejo
+  workflows reference as `https://forge.sarak.sh/actions/changelog@v1`.
+  `mikluko/action-changelog` on GitHub is its mirror and carries every release,
+  so a GitHub workflow referencing `mikluko/action-changelog@v1` resolves it as
+  before.
+
 ## [1.4.0] - 2026-10-04
 
 ### Added

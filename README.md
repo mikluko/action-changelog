@@ -18,8 +18,22 @@ annotation, so a failing check lands on the offending line of the diff.
 `fetch-depth: 0` brings the tags the action compares the changelog against. A
 default checkout is shallow and carries none, and `no-git-tags` fires.
 
-A Docker container action, so it runs on Linux runners. It reaches the network
-only to pull its own image.
+On Forgejo the same step names the action by its full URL:
+
+```yaml
+- uses: https://forge.sarak.sh/actions/changelog@v1
+```
+
+The action is developed at
+[forge.sarak.sh/actions/changelog](https://forge.sarak.sh/actions/changelog),
+and [`mikluko/action-changelog`](https://github.com/mikluko/action-changelog) on
+GitHub is its mirror, carrying the same tags and releases.
+
+A composite action that downloads a static binary from its release and runs it.
+It runs on Linux and macOS runners, X64 or ARM64, and needs bash, curl, and
+`sha256sum` or `shasum`. It reaches the network only to download its own binary:
+from GitHub first on GitHub and from Forgejo first everywhere else, falling back
+to the other where the first fails.
 
 [`examples/`](examples/) carries complete workflows for
 [two release strategies](#two-worked-policies).
@@ -367,20 +381,25 @@ go run github.com/mikluko/action-changelog@latest -list-checks
 This repository releases itself with its own action, which is the shortest
 statement of what the action is for.
 
-`action.yaml` names the image it runs, so that reference has to be immutable and
-correct at the moment it is committed: a workflow pinning this action by SHA
-reads the file as it stands at that commit, and nothing is rewritten onto `main`
-afterwards. A release is therefore written in the pull request, in two places a
-test holds together:
+`action.yaml` names the release whose binary it downloads, so that reference has
+to be immutable and correct at the moment it is committed: a workflow pinning
+this action by SHA reads the file as it stands at that commit, and nothing is
+rewritten onto `main` afterwards. A release is therefore written in the pull
+request, in two places a test holds together:
 
 1. `CHANGELOG.md` gains `## [1.2.3] - YYYY-MM-DD` above the previous entry.
-2. `action.yaml` runs `docker://ghcr.io/mikluko/action-changelog:v1.2.3`.
+2. `action.yaml` sets `VERSION: 1.2.3` on its `run` step.
 
 `go test ./...` fails while those disagree. Merging is the whole of it. The
-release workflow runs the action against this repository's own changelog, and
-where it reports a version no tag carries, publishes the image, cuts the tag,
-creates the release from `notes`, and moves the major tag for a final version.
-Nothing else cuts a tag here, and a tag pushed by hand is not a path.
+release workflow on Forgejo runs the action against this repository's own
+changelog, and where it reports a version no tag carries, builds the binaries
+for Linux and macOS on amd64 and arm64, cuts the tag, creates the release from
+`notes` with the binaries and their `checksums.txt` attached, runs the action
+from that release, and moves the major tag for a final version. Nothing else
+cuts a tag here, and a tag pushed by hand is not a path.
+
+The tag reaches GitHub through the mirror, and a workflow there copies the
+Forgejo release's notes and assets onto a GitHub release of the same tag.
 
 This works because the changelog names the version before the tag does, which is
 the inversion the tool exists to support.
