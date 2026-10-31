@@ -1,4 +1,4 @@
-// Command action-changelog reads a Keep a Changelog document and reports where
+// Command changelog reads a Keep a Changelog document and reports where
 // it departs from the format.
 //
 // It runs as a GitHub Action and as a local command; under GitHub Actions each
@@ -17,9 +17,9 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/mikluko/action-changelog/internal/changelog"
-	"github.com/mikluko/action-changelog/internal/git"
-	"github.com/mikluko/action-changelog/internal/output"
+	"sarak.sh/actions/changelog"
+	"sarak.sh/actions/changelog/git"
+	"sarak.sh/actions/changelog/internal/output"
 )
 
 func main() {
@@ -76,7 +76,7 @@ func main() {
 }
 
 func fail(err error) {
-	fmt.Fprintf(os.Stderr, "action-changelog: %v\n", err)
+	fmt.Fprintf(os.Stderr, "changelog: %v\n", err)
 	os.Exit(1)
 }
 

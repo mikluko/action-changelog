@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mikluko/action-changelog/internal/changelog"
+	"sarak.sh/actions/changelog"
 )
 
 const path = "../../README.md"

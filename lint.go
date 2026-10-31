@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mikluko/action-changelog/internal/semver"
+	"sarak.sh/actions/changelog/semver"
 )
 
 // Finding is one departure from the format, addressed to the line that carries

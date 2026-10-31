@@ -1,4 +1,4 @@
-module github.com/mikluko/action-changelog
+module sarak.sh/actions/changelog
 
 go 1.27.0
 

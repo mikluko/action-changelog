@@ -358,7 +358,7 @@ The action is a Go command, and every input is a flag of the same name.
 To validate `CHANGELOG.md` in the current directory:
 
 ```
-go run github.com/mikluko/action-changelog@latest
+go run sarak.sh/actions/changelog/cmd/changelog@latest
 ```
 
 Findings go to stderr and the [outputs](#outputs) to stdout. The exit status is
@@ -367,13 +367,13 @@ Findings go to stderr and the [outputs](#outputs) to stdout. The exit status is
 To validate a changelog elsewhere, where `<path>` is its path:
 
 ```
-go run github.com/mikluko/action-changelog@latest -changelog <path>
+go run sarak.sh/actions/changelog/cmd/changelog@latest -changelog <path>
 ```
 
 To print the checks and their default severities:
 
 ```
-go run github.com/mikluko/action-changelog@latest -list-checks
+go run sarak.sh/actions/changelog/cmd/changelog@latest -list-checks
 ```
 
 ## Releasing

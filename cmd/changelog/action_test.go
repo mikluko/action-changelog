@@ -9,7 +9,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/mikluko/action-changelog/internal/changelog"
+	"sarak.sh/actions/changelog"
 )
 
 // The two references a workflow resolves this action by: the GitHub mirror,
@@ -159,7 +159,7 @@ func TestDocumentedInvocationsNameTheCurrentMajor(t *testing.T) {
 		for i, line := range strings.Split(string(read(t, path)), "\n") {
 			for _, prefix := range actions {
 				// Matching on the uses: prefix leaves the go run lines alone,
-				// where github.com/mikluko/action-changelog@latest is the
+				// where sarak.sh/actions/changelog/cmd/changelog@latest is the
 				// correct reference.
 				at := strings.Index(line, "uses: "+prefix)
 				if at < 0 {

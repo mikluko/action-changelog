@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mikluko/action-changelog/internal/changelog"
+	"sarak.sh/actions/changelog"
 )
 
 // The markers delimiting the generated region. They are HTML comments, so they
