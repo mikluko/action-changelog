@@ -154,3 +154,38 @@ The ceremony with two: an open entry on a stabilization branch yields a candidat
 per pull request, and merging to the trunk dates the entry and cuts the release.
 _Avoid_: release train, GitFlow release, pre-release branch (the branch, not the
 ceremony)
+
+## Relationships
+
+### The document
+
+- **Changelog → Entry**: a changelog holds entries, newest first, with `[Unreleased]` at the top
+- **Entry → Version heading**: an entry is its version heading and everything under it
+- **Version heading → Entry state**: naming no version makes `[Unreleased]`, a version and no date an open entry, a version and a date a released entry
+- **`[Unreleased]` → Open entry → Released entry**: the order an entry's notes pass through, and only the newest versioned entry is ever open
+- **Entry → Section → Note**: an entry groups its notes under sections
+- **Note → Breaking marker**: a note carrying a breaking marker stays in the section its change belongs to
+- **Changelog → Link reference definition**: a changelog defines one per versioned entry, or none at all
+- **Pre-release → Entry, Tag**: every entry and tag naming a pre-release version is a pre-release, and stays one
+
+### Reading
+
+- **Reading → Check → Finding**: a reading runs every check not off, and a check raises findings against lines
+- **Register → Check → Severity**: the register fixes every check and the severity it carries unless a caller says otherwise
+- **Reading → Reference tag**: the tag-dependent checks compare the changelog against the reference tag
+- **Reading → Due**: a reading reports whether the newest entry is due, from its version and the repository's tags
+
+### Writing
+
+- **Append → `[Unreleased]`**: append adds a note to a section of `[Unreleased]`
+- **Release → `[Unreleased]`**: release turns `[Unreleased]` into an open or released entry, and opens an empty `[Unreleased]` above it
+- **Bump → Released entry, Section, Breaking marker**: the bump starts from the newest final version and is decided by the sections and breaking markers `[Unreleased]` carries
+- **Writer → Ceremony**: a writer changes the file and nothing else; committing it and the ceremony that follows are downstream
+
+### Ceremonies
+
+- **Ceremony → Reading**: a ceremony acts on what a reading reports: version, pre-release, already-tagged, due
+- **Ceremony → Entry**: a ceremony acts on the newest entry naming a version, never on `[Unreleased]`
+- **Release-trunk → Trunk**: release-trunk cuts one tag on the trunk from the newest released entry
+- **Release-branch → Stabilization branch → Candidate**: release-branch cuts a candidate per pull request into the stabilization branch, from its open entry
+- **Merge to trunk → Open entry**: merging the stabilization branch dates the open entry and ends a release-branch release
