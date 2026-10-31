@@ -15,6 +15,8 @@ changelog         holds     entries, newest first
 entry             is        a version heading and everything under it
 version heading   names     a version, and a date once the release has one
 [Unreleased]      names     no version, so no ceremony acts on it
+append            adds      a note under a section of [Unreleased]
+release           turns     [Unreleased] into an entry naming a version
 entry             groups    its notes under sections
 link ref          turns     a bracketed heading into a link
 document          defines   one per versioned entry, or none at all
@@ -62,8 +64,9 @@ _Avoid_: compare link (which is what one usually points at), footnote
 
 **`[Unreleased]`**:
 The entry naming no version, standing permanently at the top of the document.
-Nothing releases it: a ceremony acts on the newest entry that names a version,
-and this one never does.
+No ceremony acts on it: a ceremony acts on the newest entry that names a
+version, and this one never does. The release writer turns its notes into such
+an entry and leaves an empty one in its place.
 _Avoid_: unreleased version, next release, pending entry
 
 **Open entry**:
@@ -126,6 +129,21 @@ version tag reachable from HEAD, pre-releases admitted or not as the run was
 told. Reachability is not a setting, because a tag on a branch this checkout is
 not on is never the right baseline.
 _Avoid_: previous tag, baseline (bare), latest release
+
+## Writing
+
+**Writer**:
+An edit to the document that leaves every byte outside the lines it writes as
+it was: append, which adds a note to `[Unreleased]`, and release, which turns
+`[Unreleased]` into a released or open entry. A writer changes the file and
+nothing else; committing it, and the ceremony that follows, are downstream.
+_Avoid_: formatter, generator (neither leaves the rest of the document alone)
+
+**Bump**:
+The version release computes when none is given, from the newest entry naming a
+final version and the kind of change `[Unreleased]` carries: major for a note
+marked breaking, minor for any section but Fixed and Security, patch otherwise.
+_Avoid_: next version (bare), increment
 
 ## The release
 

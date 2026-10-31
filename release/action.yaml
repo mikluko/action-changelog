@@ -1,0 +1,65 @@
+name: Changelog release
+description: Turn a Keep a Changelog document's Unreleased entry into a versioned one.
+branding:
+  icon: tag
+  color: purple
+
+inputs:
+  changelog:
+    description: Path to the changelog, relative to the workspace.
+    required: false
+    default: CHANGELOG.md
+  version:
+    description: >-
+      The version to release, as in 1.2.3. Empty computes it from the newest
+      final version the changelog names: major for a note marked breaking,
+      minor for any section but Fixed and Security, patch otherwise.
+    required: false
+    default: ""
+  date:
+    description: The release date as YYYY-MM-DD. Empty is today in UTC.
+    required: false
+    default: ""
+  open:
+    description: >-
+      Whether to write an open entry, naming the version and no date: true or
+      false.
+    required: false
+    default: "false"
+
+outputs:
+  version:
+    description: The version released, as in 1.2.3.
+    value: ${{ steps.run.outputs.version }}
+  notes:
+    description: The body of the released entry, verbatim.
+    value: ${{ steps.run.outputs.notes }}
+  prerelease:
+    description: Whether the version released carries a pre-release part.
+    value: ${{ steps.run.outputs.prerelease }}
+
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: bash
+      env:
+        VERSION: 1.5.0
+        OS: ${{ runner.os }}
+        ARCH: ${{ runner.arch }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: bash "$ACTION_PATH/../install.sh"
+    - id: run
+      shell: bash
+      env:
+        BIN: ${{ steps.install.outputs.bin }}
+        INPUT_CHANGELOG: ${{ inputs.changelog }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_DATE: ${{ inputs.date }}
+        INPUT_OPEN: ${{ inputs.open }}
+      run: |
+        exec "$BIN" release \
+          -changelog="$INPUT_CHANGELOG" \
+          -version="$INPUT_VERSION" \
+          -date="$INPUT_DATE" \
+          -open="$INPUT_OPEN"

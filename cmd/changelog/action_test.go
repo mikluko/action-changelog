@@ -10,6 +10,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"sarak.sh/mikluko/changelog"
+	"sarak.sh/mikluko/changelog/internal/output"
+	"sarak.sh/mikluko/changelog/semver"
 )
 
 // The two references a workflow resolves this action by: the GitHub mirror,
@@ -19,7 +21,13 @@ const (
 	forgejoAction = "https://sarak.sh/mikluko/changelog@"
 )
 
-var actions = []string{action, forgejoAction}
+// actions is every reference a documented invocation may use: the reader at
+// the root and each writer in its subdirectory, under either name.
+var actions = []string{
+	action, forgejoAction,
+	"mikluko/action-changelog/append@", "https://sarak.sh/mikluko/changelog/append@",
+	"mikluko/action-changelog/release@", "https://sarak.sh/mikluko/changelog/release@",
+}
 
 // actionFile is the part of action.yaml the tests hold to the code.
 type actionFile struct {
@@ -39,21 +47,36 @@ type actionStep struct {
 	Run string            `yaml:"run"`
 }
 
-// readAction returns action.yaml and the step that runs the binary, whose
-// outputs are the action's.
-func readAction(t *testing.T) (actionFile, actionStep) {
+// actionFiles are the actions this repository publishes, each with the
+// outputs its binary writes.
+var actionFiles = []struct {
+	path    string
+	outputs []output.Output
+}{
+	{"action.yaml", outputs(changelog.Parse(nil), repoState{}, nil, "")},
+	{"append/action.yaml", nil},
+	{"release/action.yaml", releaseOutputs(semver.Version{}, "")},
+}
+
+// readAction returns the action at path, the step installing the binary, and
+// the step running it, whose outputs are the action's.
+func readAction(t *testing.T, path string) (action actionFile, install, run actionStep) {
 	t.Helper()
-	var action actionFile
-	if err := yaml.Unmarshal(read(t, "action.yaml"), &action); err != nil {
+	if err := yaml.Unmarshal(read(t, path), &action); err != nil {
 		t.Fatal(err)
 	}
 	for _, step := range action.Runs.Steps {
-		if step.ID == "run" {
-			return action, step
+		switch step.ID {
+		case "install":
+			install = step
+		case "run":
+			run = step
 		}
 	}
-	t.Fatal("action.yaml has no step with id run")
-	return action, actionStep{}
+	if install.ID == "" || run.ID == "" {
+		t.Fatalf("%s has no step with id install and one with id run", path)
+	}
+	return action, install, run
 }
 
 // TestVersionMatchesTheChangelog holds the two places a release names itself to
@@ -72,10 +95,12 @@ func TestVersionMatchesTheChangelog(t *testing.T) {
 		t.Fatal("CHANGELOG.md names no released version")
 	}
 
-	_, step := readAction(t)
-	if got, want := step.Env["VERSION"], strings.TrimPrefix(latest.Version, "v"); got != want {
-		t.Errorf("action.yaml downloads release %q, CHANGELOG.md's newest released entry is %s",
-			got, latest.Version)
+	for _, a := range actionFiles {
+		_, install, _ := readAction(t, a.path)
+		if got, want := install.Env["VERSION"], strings.TrimPrefix(latest.Version, "v"); got != want {
+			t.Errorf("%s downloads release %q, CHANGELOG.md's newest released entry is %s",
+				a.path, got, latest.Version)
+		}
 	}
 
 	// Locally there is no tag and nothing to check against.
@@ -85,47 +110,69 @@ func TestVersionMatchesTheChangelog(t *testing.T) {
 	}
 }
 
+// Every action installs the binary with the one script at the repository root,
+// reached from the action's own directory.
+func TestActionInstallsWithTheSharedScript(t *testing.T) {
+	for _, a := range actionFiles {
+		_, install, _ := readAction(t, a.path)
+		rel, err := filepath.Rel(filepath.Dir(a.path), "install.sh")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := `bash "$ACTION_PATH/` + filepath.ToSlash(rel) + `"`; strings.TrimSpace(install.Run) != want {
+			t.Errorf("%s installs with %q, want %q", a.path, install.Run, want)
+		}
+		if install.Env["ACTION_PATH"] != "${{ github.action_path }}" {
+			t.Errorf("%s sets ACTION_PATH to %q", a.path, install.Env["ACTION_PATH"])
+		}
+	}
+}
+
 // An output a consuming workflow cannot reference is one the binary writes into
 // the void, so the declaration and what emit writes are held to each other.
 func TestActionDeclaresEveryOutput(t *testing.T) {
-	action, step := readAction(t)
-	declared := action.Outputs
+	for _, a := range actionFiles {
+		t.Run(a.path, func(t *testing.T) {
+			action, _, step := readAction(t, a.path)
+			declared := action.Outputs
 
-	written := map[string]bool{}
-	for _, o := range outputs(changelog.Parse(nil), repoState{}, nil, "") {
-		written[o.Name] = true
-		if _, ok := declared[o.Name]; !ok {
-			t.Errorf("action.yaml declares no output %q", o.Name)
-		}
-	}
-	for name, o := range declared {
-		if !written[name] {
-			t.Errorf("action.yaml declares an output %q nothing writes", name)
-		}
-		if o.Description == "" {
-			t.Errorf("output %q carries no description", name)
-		}
-		// A composite action's output is empty unless it is mapped from a
-		// step's, and one mapped from another name reports the wrong value.
-		if v := o.Value; v != "${{ steps.run.outputs."+name+" }}" && v != "${{ steps.run.outputs['"+name+"'] }}" {
-			t.Errorf("output %q is %q, not the run step's output of that name", name, v)
-		}
-	}
-
-	// An input reaches the binary as the flag of the same name and nowhere
-	// else, through a variable of the step's environment, so one the script
-	// never passes is a documented setting that does nothing.
-	for name := range action.Inputs {
-		var passed bool
-		for key, v := range step.Env {
-			if v != "${{ inputs."+name+" }}" && v != "${{ inputs['"+name+"'] }}" {
-				continue
+			written := map[string]bool{}
+			for _, o := range a.outputs {
+				written[o.Name] = true
+				if _, ok := declared[o.Name]; !ok {
+					t.Errorf("declares no output %q", o.Name)
+				}
 			}
-			passed = passed || strings.Contains(step.Run, "-"+name+`="$`+key+`"`)
-		}
-		if !passed {
-			t.Errorf("input %q reaches no -%s argument", name, name)
-		}
+			for name, o := range declared {
+				if !written[name] {
+					t.Errorf("declares an output %q nothing writes", name)
+				}
+				if o.Description == "" {
+					t.Errorf("output %q carries no description", name)
+				}
+				// A composite action's output is empty unless it is mapped from a
+				// step's, and one mapped from another name reports the wrong value.
+				if v := o.Value; v != "${{ steps.run.outputs."+name+" }}" && v != "${{ steps.run.outputs['"+name+"'] }}" {
+					t.Errorf("output %q is %q, not the run step's output of that name", name, v)
+				}
+			}
+
+			// An input reaches the binary as the flag of the same name and nowhere
+			// else, through a variable of the step's environment, so one the script
+			// never passes is a documented setting that does nothing.
+			for name := range action.Inputs {
+				var passed bool
+				for key, v := range step.Env {
+					if v != "${{ inputs."+name+" }}" && v != "${{ inputs['"+name+"'] }}" {
+						continue
+					}
+					passed = passed || strings.Contains(step.Run, "-"+name+`="$`+key+`"`)
+				}
+				if !passed {
+					t.Errorf("input %q reaches no -%s argument", name, name)
+				}
+			}
+		})
 	}
 }
 

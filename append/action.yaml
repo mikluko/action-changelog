@@ -1,0 +1,45 @@
+name: Changelog append
+description: Add a note under a section of a Keep a Changelog document's Unreleased entry.
+branding:
+  icon: edit
+  color: purple
+
+inputs:
+  changelog:
+    description: Path to the changelog, relative to the workspace.
+    required: false
+    default: CHANGELOG.md
+  section:
+    description: >-
+      The level-3 heading to add the note under, as in Added. Created where
+      the Unreleased entry has none, in Keep a Changelog order.
+    required: true
+  note:
+    description: >-
+      The note, without its list marker. A multi-line note stays one item. A
+      section already carrying it is left as it is.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: bash
+      env:
+        VERSION: 1.5.0
+        OS: ${{ runner.os }}
+        ARCH: ${{ runner.arch }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: bash "$ACTION_PATH/../install.sh"
+    - id: run
+      shell: bash
+      env:
+        BIN: ${{ steps.install.outputs.bin }}
+        INPUT_CHANGELOG: ${{ inputs.changelog }}
+        INPUT_SECTION: ${{ inputs.section }}
+        INPUT_NOTE: ${{ inputs.note }}
+      run: |
+        exec "$BIN" append \
+          -changelog="$INPUT_CHANGELOG" \
+          -section="$INPUT_SECTION" \
+          -note="$INPUT_NOTE"

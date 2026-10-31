@@ -1,5 +1,5 @@
 // Command changelog reads a Keep a Changelog document and reports where
-// it departs from the format.
+// it departs from the format; its append and release subcommands edit it.
 //
 // It runs as a GitHub Action and as a local command; under GitHub Actions each
 // finding is additionally emitted as a workflow annotation, so a failing check
@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"sarak.sh/mikluko/changelog"
 	"sarak.sh/mikluko/changelog/git"
@@ -23,6 +24,34 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 {
+		var err error
+		switch os.Args[1] {
+		case "append":
+			err = appendCmd(os.Args[2:], os.Stderr)
+		case "release":
+			err = releaseCmd(os.Args[2:], os.Stdout, os.Stderr, time.Now)
+		default:
+			if !strings.HasPrefix(os.Args[1], "-") {
+				fail(fmt.Errorf("%q is not a subcommand: append, release, or none to read the changelog", os.Args[1]))
+			}
+			inspect()
+			return
+		}
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
+		if err != nil {
+			fail(err)
+		}
+		return
+	}
+	inspect()
+}
+
+// inspect validates the changelog and reports what it names, which is what
+// the command does given no subcommand.
+func inspect() {
 	var (
 		path       = flag.String("changelog", "CHANGELOG.md", "path to the changelog")
 		sections   = flag.String("sections", "", "comma-separated level-3 headings to accept; the Keep a Changelog six when empty")
