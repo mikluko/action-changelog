@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`append` action**, `mikluko/action-changelog/append@v1`, which adds a note
+  under a section of the `[Unreleased]` entry.
+- **`release` action**, `mikluko/action-changelog/release@v1`, which turns the
+  `[Unreleased]` entry into a dated or open versioned entry, with the version
+  given or computed from its notes, and reports `version`, `notes` and
+  `prerelease`.
+- `append` and `release` subcommands of the command.
+- The Go packages `sarak.sh/actions/changelog`,
+  `sarak.sh/actions/changelog/semver` and `sarak.sh/actions/changelog/git`.
+
+### Changed
+
+- **Breaking:** the command's module path is `sarak.sh/actions/changelog`; run
+  it as `go run sarak.sh/actions/changelog/cmd/changelog@latest`.
+
 ## [1.5.0] - 2026-10-22
 
 ### Changed

@@ -268,8 +268,6 @@ func Release(src []byte, version semver.Version, date string) ([]byte, error) {
 	if date != "" {
 		heading += " - " + date
 	}
-	// Refs sit below every entry, so they are rewritten first and the heading
-	// offsets stay valid.
 	out, err := releaseRefs(src, l.refs, version)
 	if err != nil {
 		return nil, err
@@ -283,7 +281,8 @@ func Release(src []byte, version semver.Version, date string) ([]byte, error) {
 
 // releaseRefs moves the [Unreleased] compare link to start at version's tag and
 // adds the definition for version below it. A document defining no link
-// references is returned as it is.
+// references is returned as it is. It edits only below the last entry, so
+// offsets into the entries stay valid.
 func releaseRefs(src []byte, refs []refSpan, version semver.Version) ([]byte, error) {
 	if len(refs) == 0 {
 		return src, nil
