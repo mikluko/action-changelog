@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-31
+
 ### Added
 
 - **`append` action**, `mikluko/action-changelog/append@v1`, which adds a note
@@ -335,7 +337,8 @@ recorded separately: nothing consumed them but this repository.
   candidate can be pulled and tested before it merges, and one reaching `main`
   is refused rather than published.
 
-[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/mikluko/action-changelog/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/mikluko/action-changelog/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/mikluko/action-changelog/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/mikluko/action-changelog/compare/v1.3.0...v1.3.1
