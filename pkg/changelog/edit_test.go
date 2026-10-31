@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"sarak.sh/mikluko/changelog/semver"
+	"sarak.sh/mikluko/changelog/pkg/semver"
 )
 
 const head = "# Changelog\n\nPreamble.\n\n"

@@ -452,9 +452,9 @@ go run sarak.sh/mikluko/changelog/cmd/changelog@latest release
 ```
 
 The Go packages the command is built on are importable:
-`sarak.sh/mikluko/changelog` parses, checks and edits a document, and
-`sarak.sh/mikluko/changelog/semver` and `sarak.sh/mikluko/changelog/git` read
-versions and a repository's tags.
+`sarak.sh/mikluko/changelog/pkg/changelog` parses, checks and edits a
+document, and `sarak.sh/mikluko/changelog/pkg/semver` and
+`sarak.sh/mikluko/changelog/pkg/git` read versions and a repository's tags.
 
 ## Releasing
 

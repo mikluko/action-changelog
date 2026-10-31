@@ -18,9 +18,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"sarak.sh/mikluko/changelog"
-	"sarak.sh/mikluko/changelog/git"
 	"sarak.sh/mikluko/changelog/internal/output"
+	"sarak.sh/mikluko/changelog/pkg/changelog"
+	"sarak.sh/mikluko/changelog/pkg/git"
 )
 
 func main() {

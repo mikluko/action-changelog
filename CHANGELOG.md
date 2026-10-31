@@ -16,8 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   given or computed from its notes, and reports `version`, `notes` and
   `prerelease`.
 - `append` and `release` subcommands of the command.
-- The Go packages `sarak.sh/mikluko/changelog`,
-  `sarak.sh/mikluko/changelog/semver` and `sarak.sh/mikluko/changelog/git`.
+- The Go packages `sarak.sh/mikluko/changelog/pkg/changelog`,
+  `sarak.sh/mikluko/changelog/pkg/semver` and
+  `sarak.sh/mikluko/changelog/pkg/git`.
 
 ### Changed
 

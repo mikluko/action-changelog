@@ -9,9 +9,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"sarak.sh/mikluko/changelog"
 	"sarak.sh/mikluko/changelog/internal/output"
-	"sarak.sh/mikluko/changelog/semver"
+	"sarak.sh/mikluko/changelog/pkg/changelog"
+	"sarak.sh/mikluko/changelog/pkg/semver"
 )
 
 // The two references a workflow resolves this action by: the GitHub mirror,

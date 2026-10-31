@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"sarak.sh/mikluko/changelog"
 	"sarak.sh/mikluko/changelog/internal/output"
-	"sarak.sh/mikluko/changelog/semver"
+	"sarak.sh/mikluko/changelog/pkg/changelog"
+	"sarak.sh/mikluko/changelog/pkg/semver"
 )
 
 // appendCmd adds one note under a section of the [Unreleased] entry and writes
