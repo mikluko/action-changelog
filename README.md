@@ -351,6 +351,74 @@ one entry, many tags
 `go test ./...` validates both trees under the inputs their workflows carry, so
 the examples are executed rather than described.
 
+## Writing the changelog
+
+Two more actions in this repository edit the document rather than read it. Each
+changes the file in the workspace and nothing else: committing the result is the
+workflow's to do. Every byte outside the lines they write is preserved.
+
+### Append
+
+Adds a note under a section of the `[Unreleased]` entry:
+
+```yaml
+- uses: mikluko/action-changelog/append@v1
+  with:
+    section: Fixed
+    note: The parser no longer reads a fenced heading as an entry.
+```
+
+| Input | Default | Description |
+|---|---|---|
+| `changelog` | `CHANGELOG.md` | Path to the changelog, relative to the workspace. |
+| `section` | *(required)* | The level-3 heading to add the note under. |
+| `note` | *(required)* | The note, without its list marker. |
+
+A missing section is created in Keep a Changelog order, and a missing
+`[Unreleased]` entry above the newest entry. A multi-line note stays one list
+item. A section already carrying the same item is left as it is, so a rerun
+adds nothing.
+
+### Release
+
+Turns the `[Unreleased]` entry into a versioned one and opens a new, empty
+`[Unreleased]` above it:
+
+```yaml
+- uses: mikluko/action-changelog/release@v1
+  id: release
+```
+
+| Input | Default | Description |
+|---|---|---|
+| `changelog` | `CHANGELOG.md` | Path to the changelog, relative to the workspace. |
+| `version` | *(empty)* | The version to release. Empty computes it from the notes. |
+| `date` | *(empty)* | The release date as `YYYY-MM-DD`. Empty is today in UTC. |
+| `open` | `false` | `true` writes an [open entry](#two-worked-policies), naming the version and no date. |
+
+| Output | Example | Description |
+|---|---|---|
+| `version` | `1.3.0` | The version released. |
+| `notes` | | The body of the released entry, verbatim. |
+| `prerelease` | `false` | Whether `version` carries a pre-release part. |
+
+A computed version is bumped from the newest entry naming a final version:
+
+| The `[Unreleased]` entry carries | Bump |
+|---|---|
+| a `Breaking` section, or a note opening with `**Breaking:**` | major; minor below 1.0.0 |
+| any section other than `Fixed` and `Security` | minor |
+| `Fixed` and `Security` only, or no sections | patch |
+
+Where the `[Unreleased]` link reference is a compare URL ending in `...HEAD`, it
+is moved to start at the new tag and a link reference for the release is added
+below it. The tag is spelled with a leading `v` exactly when the previous one in
+that URL is.
+
+The action refuses an `[Unreleased]` entry with no notes, a version not above
+every version the document names, and a document whose newest versioned entry
+is still open.
+
 ## Local use
 
 The action is a Go command, and every input is a flag of the same name.
@@ -358,7 +426,7 @@ The action is a Go command, and every input is a flag of the same name.
 To validate `CHANGELOG.md` in the current directory:
 
 ```
-go run github.com/mikluko/action-changelog@latest
+go run sarak.sh/mikluko/changelog/cmd/changelog@latest
 ```
 
 Findings go to stderr and the [outputs](#outputs) to stdout. The exit status is
@@ -367,14 +435,26 @@ Findings go to stderr and the [outputs](#outputs) to stdout. The exit status is
 To validate a changelog elsewhere, where `<path>` is its path:
 
 ```
-go run github.com/mikluko/action-changelog@latest -changelog <path>
+go run sarak.sh/mikluko/changelog/cmd/changelog@latest -changelog <path>
 ```
 
 To print the checks and their default severities:
 
 ```
-go run github.com/mikluko/action-changelog@latest -list-checks
+go run sarak.sh/mikluko/changelog/cmd/changelog@latest -list-checks
 ```
+
+The writers are subcommands, taking their inputs as flags of the same name:
+
+```
+go run sarak.sh/mikluko/changelog/cmd/changelog@latest append -section Fixed -note "<note>"
+go run sarak.sh/mikluko/changelog/cmd/changelog@latest release
+```
+
+The Go packages the command is built on are importable:
+`sarak.sh/mikluko/changelog/pkg/changelog` parses, checks and edits a
+document, and `sarak.sh/mikluko/changelog/pkg/semver` and
+`sarak.sh/mikluko/changelog/pkg/git` read versions and a repository's tags.
 
 ## Releasing
 

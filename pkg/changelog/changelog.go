@@ -14,7 +14,7 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
 
-	"github.com/mikluko/action-changelog/internal/semver"
+	"sarak.sh/mikluko/changelog/pkg/semver"
 )
 
 // Section is a level-3 heading under an entry, such as "Added".

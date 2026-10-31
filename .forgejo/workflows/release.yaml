@@ -43,7 +43,7 @@ jobs:
       # and a published one would be the previous version reading this commit.
       - name: Read the changelog
         id: changelog
-        run: go run . -changelog CHANGELOG.md
+        run: go run ./cmd/changelog -changelog CHANGELOG.md
 
       # The action reports; this decides. It is the only place a tag spelling is
       # chosen, which is why the action emits none.
@@ -76,7 +76,7 @@ jobs:
         if: steps.cut.outputs.due == 'true'
         env:
           GITHUB_REF_NAME: ${{ steps.cut.outputs.tag }}
-        run: go test -run TestVersionMatchesTheChangelog .
+        run: go test -run TestVersionMatchesTheChangelog ./cmd/changelog
 
       # The asset names and the checksums.txt format are what action.yaml
       # downloads and verifies.
@@ -87,7 +87,7 @@ jobs:
           mkdir -p "$dist"
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
             CGO_ENABLED=0 GOOS=${target%/*} GOARCH=${target#*/} \
-              go build -trimpath -ldflags='-s -w' -o "$dist/changelog_${target%/*}_${target#*/}" .
+              go build -trimpath -ldflags='-s -w' -o "$dist/changelog_${target%/*}_${target#*/}" ./cmd/changelog
           done
           (cd "$dist" && sha256sum changelog_* >checksums.txt)
 
@@ -158,6 +158,38 @@ jobs:
             echo "::error::the published action reports version=${VERSION:-none} already-tagged=$TAGGED, want $WANT and true"
             exit 1
           fi
+
+      # The writers as a consumer runs them, on a copy so the checkout stays
+      # what was released.
+      - name: Copy the changelog for the writers
+        if: steps.cut.outputs.due == 'true'
+        run: cp CHANGELOG.md "$RUNNER_TEMP/CHANGELOG.md"
+
+      - name: Run the published append action
+        if: steps.cut.outputs.due == 'true'
+        uses: ./append
+        with:
+          changelog: ${{ runner.temp }}/CHANGELOG.md
+          section: Added
+          note: The release workflow's smoke test.
+
+      - name: Run the published release action
+        id: smoke-release
+        if: steps.cut.outputs.due == 'true'
+        uses: ./release
+        with:
+          changelog: ${{ runner.temp }}/CHANGELOG.md
+
+      - name: The published release action released the appended note
+        if: steps.cut.outputs.due == 'true'
+        env:
+          VERSION: ${{ steps.smoke-release.outputs.version }}
+          NOTES: ${{ steps.smoke-release.outputs.notes }}
+        run: |
+          case "$NOTES" in
+            *"The release workflow's smoke test."*) ;;
+            *) echo "::error::the published release action released version=${VERSION:-none} without the appended note"; exit 1 ;;
+          esac
 
       # Last, because it is the reference consumers follow and it should move
       # only once everything above it is in place. No pre-release reaches here,

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mikluko/action-changelog/internal/git"
+	"sarak.sh/mikluko/changelog/pkg/git"
 )
 
 const (

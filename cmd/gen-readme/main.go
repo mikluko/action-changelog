@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mikluko/action-changelog/internal/readme"
+	"sarak.sh/mikluko/changelog/internal/readme"
 )
 
 func main() {
