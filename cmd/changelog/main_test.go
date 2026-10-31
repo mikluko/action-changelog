@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"sarak.sh/actions/changelog"
-	"sarak.sh/actions/changelog/git"
+	"sarak.sh/actions/changelog/pkg/changelog"
+	"sarak.sh/actions/changelog/pkg/git"
 )
 
 // A changelog with one departure: the date is not YYYY-MM-DD.

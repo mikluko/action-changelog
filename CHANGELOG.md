@@ -16,8 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   given or computed from its notes, and reports `version`, `notes` and
   `prerelease`.
 - `append` and `release` subcommands of the command.
-- The Go packages `sarak.sh/actions/changelog`,
-  `sarak.sh/actions/changelog/semver` and `sarak.sh/actions/changelog/git`.
+- The Go packages `sarak.sh/actions/changelog/pkg/changelog`,
+  `sarak.sh/actions/changelog/pkg/semver` and
+  `sarak.sh/actions/changelog/pkg/git`.
 
 ### Changed
 

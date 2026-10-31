@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"sarak.sh/actions/changelog/semver"
+	"sarak.sh/actions/changelog/pkg/semver"
 )
 
 func TestParseHeadingForms(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"sarak.sh/actions/changelog"
+	"sarak.sh/actions/changelog/pkg/changelog"
 )
 
 const tagged = `# Changelog

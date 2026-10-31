@@ -452,9 +452,9 @@ go run sarak.sh/actions/changelog/cmd/changelog@latest release
 ```
 
 The Go packages the command is built on are importable:
-`sarak.sh/actions/changelog` parses, checks and edits a document, and
-`sarak.sh/actions/changelog/semver` and `sarak.sh/actions/changelog/git` read
-versions and a repository's tags.
+`sarak.sh/actions/changelog/pkg/changelog` parses, checks and edits a
+document, and `sarak.sh/actions/changelog/pkg/semver` and
+`sarak.sh/actions/changelog/pkg/git` read versions and a repository's tags.
 
 ## Releasing
 

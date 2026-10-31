@@ -10,7 +10,7 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
 
-	"sarak.sh/actions/changelog/semver"
+	"sarak.sh/actions/changelog/pkg/semver"
 )
 
 // layout is where the parts of a document sit in its source, by byte offset.

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"sarak.sh/actions/changelog/semver"
+	"sarak.sh/actions/changelog/pkg/semver"
 )
 
 // Finding is one departure from the format, addressed to the line that carries
