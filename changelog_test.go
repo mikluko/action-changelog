@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mikluko/action-changelog/internal/semver"
+	"sarak.sh/mikluko/changelog/semver"
 )
 
 func TestParseHeadingForms(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mikluko/action-changelog/internal/changelog"
+	"sarak.sh/mikluko/changelog"
 )
 
 const tagged = `# Changelog

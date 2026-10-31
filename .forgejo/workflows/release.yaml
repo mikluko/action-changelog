@@ -43,7 +43,7 @@ jobs:
       # and a published one would be the previous version reading this commit.
       - name: Read the changelog
         id: changelog
-        run: go run . -changelog CHANGELOG.md
+        run: go run ./cmd/changelog -changelog CHANGELOG.md
 
       # The action reports; this decides. It is the only place a tag spelling is
       # chosen, which is why the action emits none.
@@ -76,7 +76,7 @@ jobs:
         if: steps.cut.outputs.due == 'true'
         env:
           GITHUB_REF_NAME: ${{ steps.cut.outputs.tag }}
-        run: go test -run TestVersionMatchesTheChangelog .
+        run: go test -run TestVersionMatchesTheChangelog ./cmd/changelog
 
       # The asset names and the checksums.txt format are what action.yaml
       # downloads and verifies.
@@ -87,7 +87,7 @@ jobs:
           mkdir -p "$dist"
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
             CGO_ENABLED=0 GOOS=${target%/*} GOARCH=${target#*/} \
-              go build -trimpath -ldflags='-s -w' -o "$dist/changelog_${target%/*}_${target#*/}" .
+              go build -trimpath -ldflags='-s -w' -o "$dist/changelog_${target%/*}_${target#*/}" ./cmd/changelog
           done
           (cd "$dist" && sha256sum changelog_* >checksums.txt)
 

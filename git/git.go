@@ -23,7 +23,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/go-git/go-git/v5/storage/filesystem"
-	"github.com/mikluko/action-changelog/internal/semver"
+	"sarak.sh/mikluko/changelog/semver"
 )
 
 // Tag is a tag reference and the object it names, which is a commit for a
