@@ -21,8 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Breaking:** the command's module path is `sarak.sh/actions/changelog`; run
-  it as `go run sarak.sh/actions/changelog/cmd/changelog@latest`.
+- The command's module path is `sarak.sh/actions/changelog`, run as
+  `go run sarak.sh/actions/changelog/cmd/changelog@latest`.
+  `github.com/mikluko/action-changelog` gets no further versions.
 
 ## [1.5.0] - 2026-10-22
 
