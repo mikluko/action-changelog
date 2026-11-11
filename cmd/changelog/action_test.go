@@ -136,46 +136,61 @@ func TestActionDeclaresEveryOutput(t *testing.T) {
 	for _, a := range actionFiles {
 		t.Run(a.path, func(t *testing.T) {
 			action, _, step := readAction(t, a.path)
-			declared := action.Outputs
-
-			written := map[string]bool{}
-			for _, o := range a.outputs {
-				written[o.Name] = true
-				if _, ok := declared[o.Name]; !ok {
-					t.Errorf("declares no output %q", o.Name)
-				}
-			}
-			for name, o := range declared {
-				if !written[name] {
-					t.Errorf("declares an output %q nothing writes", name)
-				}
-				if o.Description == "" {
-					t.Errorf("output %q carries no description", name)
-				}
-				// A composite action's output is empty unless it is mapped from a
-				// step's, and one mapped from another name reports the wrong value.
-				if v := o.Value; v != "${{ steps.run.outputs."+name+" }}" && v != "${{ steps.run.outputs['"+name+"'] }}" {
-					t.Errorf("output %q is %q, not the run step's output of that name", name, v)
-				}
-			}
-
-			// An input reaches the binary as the flag of the same name and nowhere
-			// else, through a variable of the step's environment, so one the script
-			// never passes is a documented setting that does nothing.
-			for name := range action.Inputs {
-				var passed bool
-				for key, v := range step.Env {
-					if v != "${{ inputs."+name+" }}" && v != "${{ inputs['"+name+"'] }}" {
-						continue
-					}
-					passed = passed || strings.Contains(step.Run, "-"+name+`="$`+key+`"`)
-				}
-				if !passed {
-					t.Errorf("input %q reaches no -%s argument", name, name)
-				}
-			}
+			checkOutputs(t, action, a.outputs)
+			checkInputs(t, action, step)
 		})
 	}
+}
+
+// checkOutputs holds the outputs action declares to those the binary writes,
+// each mapped from the run step's output of the same name: a composite action's
+// output is empty unless it is mapped from a step's, and one mapped from
+// another name reports the wrong value.
+func checkOutputs(t *testing.T, action actionFile, outputs []output.Output) {
+	t.Helper()
+	written := map[string]bool{}
+	for _, o := range outputs {
+		written[o.Name] = true
+		if _, ok := action.Outputs[o.Name]; !ok {
+			t.Errorf("declares no output %q", o.Name)
+		}
+	}
+	for name, o := range action.Outputs {
+		if !written[name] {
+			t.Errorf("declares an output %q nothing writes", name)
+		}
+		if o.Description == "" {
+			t.Errorf("output %q carries no description", name)
+		}
+		if v := o.Value; v != "${{ steps.run.outputs."+name+" }}" && v != "${{ steps.run.outputs['"+name+"'] }}" {
+			t.Errorf("output %q is %q, not the run step's output of that name", name, v)
+		}
+	}
+}
+
+// checkInputs holds every input of action to reaching the binary as the flag
+// of the same name, through a variable of step's environment: one the script
+// never passes is a documented setting that does nothing.
+func checkInputs(t *testing.T, action actionFile, step actionStep) {
+	t.Helper()
+	for name := range action.Inputs {
+		if !passes(step, name) {
+			t.Errorf("input %q reaches no -%s argument", name, name)
+		}
+	}
+}
+
+// passes reports whether step hands input name to the binary as -name.
+func passes(step actionStep, name string) bool {
+	for key, v := range step.Env {
+		if v != "${{ inputs."+name+" }}" && v != "${{ inputs['"+name+"'] }}" {
+			continue
+		}
+		if strings.Contains(step.Run, "-"+name+`="$`+key+`"`) {
+			return true
+		}
+	}
+	return false
 }
 
 // Every documented invocation names the major tag the release workflow moves:
@@ -187,8 +202,29 @@ func TestActionDeclaresEveryOutput(t *testing.T) {
 // an old one.
 func TestDocumentedInvocationsNameTheCurrentMajor(t *testing.T) {
 	major := pendingMajor(t)
+	found := invocations(t)
+	if len(found) == 0 {
+		t.Fatalf("no invocation of %q found; this test is checking nothing", actions)
+	}
+	for _, in := range found {
+		if want := in.prefix + major; in.ref != want {
+			t.Errorf("%s:%d names %q, want %q", in.path, in.line, in.ref, want)
+		}
+	}
+}
 
-	var found int
+// invocation is one uses: line naming an action of this repository.
+type invocation struct {
+	path        string
+	line        int
+	prefix, ref string
+}
+
+// invocations returns every uses: line naming one of actions in the Markdown
+// and YAML files outside dot-directories.
+func invocations(t *testing.T) []invocation {
+	t.Helper()
+	var out []invocation
 	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -201,33 +237,32 @@ func TestDocumentedInvocationsNameTheCurrentMajor(t *testing.T) {
 		}
 		switch filepath.Ext(path) {
 		case ".md", ".yaml", ".yml":
-		default:
-			return nil
-		}
-		for i, line := range strings.Split(string(read(t, path)), "\n") {
-			for _, prefix := range actions {
-				// Matching on the uses: prefix leaves the go run lines alone,
-				// where sarak.sh/mikluko/changelog/cmd/changelog@latest is the
-				// correct reference.
-				at := strings.Index(line, "uses: "+prefix)
-				if at < 0 {
-					continue
-				}
-				found++
-				ref := strings.Fields(line[at+len("uses: "):])[0]
-				if want := prefix + major; ref != want {
-					t.Errorf("%s:%d names %q, want %q", path, i+1, ref, want)
-				}
-			}
+			out = append(out, invocationsIn(path, string(read(t, path)))...)
 		}
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if found == 0 {
-		t.Fatalf("no invocation of %q found; this test is checking nothing", actions)
+	return out
+}
+
+// invocationsIn returns the invocations in src, the file at path. Matching on
+// the uses: prefix leaves the go run lines alone, where
+// sarak.sh/mikluko/changelog/cmd/changelog@latest is the correct reference.
+func invocationsIn(path, src string) []invocation {
+	var out []invocation
+	for i, line := range strings.Split(src, "\n") {
+		for _, prefix := range actions {
+			at := strings.Index(line, "uses: "+prefix)
+			if at < 0 {
+				continue
+			}
+			ref := strings.Fields(line[at+len("uses: "):])[0]
+			out = append(out, invocation{path: path, line: i + 1, prefix: prefix, ref: ref})
+		}
 	}
+	return out
 }
 
 // pendingMajor is the major tag of the release folding .changelog/ would cut,

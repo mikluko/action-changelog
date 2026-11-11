@@ -96,10 +96,12 @@ jobs:
             echo "::error::nothing to release: $REASON"
             exit 1
           fi
-          echo "due=true" >>"$GITHUB_OUTPUT"
-          echo "version=$VERSION" >>"$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >>"$GITHUB_OUTPUT"
-          echo "major=v${VERSION%%.*}" >>"$GITHUB_OUTPUT"
+          {
+            echo "due=true"
+            echo "version=$VERSION"
+            echo "tag=v$VERSION"
+            echo "major=v${VERSION%%.*}"
+          } >>"$GITHUB_OUTPUT"
 
       # The whole suite, on the tree the release commit carries: the tag about
       # to be cut, actions/VERSION and the changelog are held to each other, and

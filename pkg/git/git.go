@@ -277,19 +277,7 @@ func (r *Repo) Reference(tags []Tag, admit Eligible) (Tag, bool, error) {
 		return Tag{}, false, nil
 	}
 
-	// Resolving each candidate up front makes the walk below one map lookup per
-	// commit rather than one ancestry query per tag. Where two tags name the
-	// same commit the higher version wins, candidates being highest first.
-	rank := make(map[plumbing.Hash]int, len(candidates))
-	for i, t := range candidates {
-		commit, err := r.commit(t.Hash)
-		if err != nil {
-			continue
-		}
-		if _, ok := rank[commit.Hash]; !ok {
-			rank[commit.Hash] = i
-		}
-	}
+	rank := r.rank(candidates)
 
 	head, err := storer.ResolveReference(r.store, plumbing.HEAD)
 	if err != nil {
@@ -302,12 +290,42 @@ func (r *Repo) Reference(tags []Tag, admit Eligible) (Tag, bool, error) {
 		return Tag{}, false, fmt.Errorf("HEAD at %s: %w", head.Hash(), err)
 	}
 
-	// The walk stops the moment the highest candidate is reached, so a checkout
-	// standing at or just past its newest tag pays for the commits in between
-	// and no more. Nothing else can improve on rank 0.
-	best := len(candidates)
+	best := r.best(head.Hash(), rank, len(candidates))
+	if best == len(candidates) {
+		return Tag{}, false, nil
+	}
+	return candidates[best], true, nil
+}
+
+// rank maps the commit each candidate names to its index, candidates being
+// highest first, so where two tags name one commit the higher version wins. A
+// candidate whose commit cannot be read is left out.
+//
+// Resolving each candidate up front makes the walk one map lookup per commit
+// rather than one ancestry query per tag.
+func (r *Repo) rank(candidates []Tag) map[plumbing.Hash]int {
+	rank := make(map[plumbing.Hash]int, len(candidates))
+	for i, t := range candidates {
+		commit, err := r.commit(t.Hash)
+		if err != nil {
+			continue
+		}
+		if _, ok := rank[commit.Hash]; !ok {
+			rank[commit.Hash] = i
+		}
+	}
+	return rank
+}
+
+// best returns the lowest rank of any commit reachable from head, or none
+// where no ranked commit is reachable.
+//
+// The walk stops the moment rank 0 is reached, so a checkout standing at or
+// just past its newest tag pays for the commits in between and no more.
+func (r *Repo) best(head plumbing.Hash, rank map[plumbing.Hash]int, none int) int {
+	best := none
 	seen := make(map[plumbing.Hash]bool)
-	queue := []plumbing.Hash{head.Hash()}
+	queue := []plumbing.Hash{head}
 	for len(queue) > 0 && best != 0 {
 		h := queue[0]
 		queue = queue[1:]
@@ -326,10 +344,7 @@ func (r *Repo) Reference(tags []Tag, admit Eligible) (Tag, bool, error) {
 		}
 		queue = append(queue, commit.ParentHashes...)
 	}
-	if best == len(candidates) {
-		return Tag{}, false, nil
-	}
-	return candidates[best], true, nil
+	return best
 }
 
 // final drops the tags naming a pre-release version, which is what costs a
@@ -379,22 +394,9 @@ func discover(dir string) (root, dot string, err error) {
 	}
 	for {
 		candidate := filepath.Join(abs, ".git")
-		info, err := os.Stat(candidate)
-		if err == nil {
-			if !info.IsDir() {
-				named := candidate
-				if candidate, err = gitdir(named); err != nil {
-					return "", "", err
-				}
-				if err := readable(candidate, named); err != nil {
-					return "", "", err
-				}
-			}
-			dot, err := common(candidate)
+		if info, err := os.Stat(candidate); err == nil {
+			dot, err := store(candidate, info.IsDir())
 			if err != nil {
-				return "", "", err
-			}
-			if err := readable(dot, candidate); err != nil {
 				return "", "", err
 			}
 			return abs, dot, nil
@@ -405,6 +407,29 @@ func discover(dir string) (root, dot string, err error) {
 		}
 		abs = parent
 	}
+}
+
+// store returns the directory holding the tags and objects of the repository
+// whose .git is at candidate: a directory, or a file naming one.
+func store(candidate string, isDir bool) (string, error) {
+	if !isDir {
+		named := candidate
+		var err error
+		if candidate, err = gitdir(named); err != nil {
+			return "", err
+		}
+		if err := readable(candidate, named); err != nil {
+			return "", err
+		}
+	}
+	dot, err := common(candidate)
+	if err != nil {
+		return "", err
+	}
+	if err := readable(dot, candidate); err != nil {
+		return "", err
+	}
+	return dot, nil
 }
 
 // readable reports that dir, which named it, is not a directory this process

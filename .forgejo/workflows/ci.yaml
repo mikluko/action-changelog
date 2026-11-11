@@ -25,7 +25,9 @@ jobs:
           go run ./cmd/gen-readme
           git diff --exit-code -- README.md
 
-  changelog:
+  # Every linter runs whatever the one before it found, so a pull request
+  # learns everything that is wrong with it in one run.
+  lint:
     runs-on: ubuntu-latest
     steps:
       # The tag-dependent checks and the reference tag both read the history,
@@ -37,15 +39,41 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # .golangci.yaml carries the standard set, gocognit for complexity, and
+      # gofmt.
+      - name: golangci-lint
+        if: ${{ !cancelled() }}
+        uses: https://github.com/golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+
+      # Scanned with the go.mod toolchain, which is the one the release builds
+      # the binaries with.
+      - name: govulncheck
+        if: ${{ !cancelled() }}
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+      # actionlint reads a uses: naming an action by URL, the Forgejo spelling,
+      # as malformed, and cannot follow the examples' reusable workflow out of
+      # the .github/ they are written for.
+      - name: actionlint
+        if: ${{ !cancelled() }}
+        run: >-
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          -ignore 'in invalid format because owner and repo and ref should not be empty'
+          -ignore 'could not read reusable workflow file'
+          .forgejo/workflows/*.yaml .github/workflows/*.yaml examples/*/workflows/*.yaml
+
       # Built from source, so a pull request is checked by the code it changes
       # rather than by the last release of that code. prerelease-entry stays off
       # here: a release candidate is what a pull request is allowed to name, and
       # main is where it is refused.
       #
-      # A pull request has to add a fragment, and on a push to main, where no
-      # base branch is named, missing-fragment is silent.
+      # A pull request has to carry notes, and on a push to main, where no base
+      # branch is named, missing-fragment is silent.
       - name: Validate the changelog
         id: changelog
+        if: ${{ !cancelled() }}
         env:
           BASE: ${{ github.base_ref }}
         run: go run ./cmd/changelog -changelog CHANGELOG.md -fragments .changelog -base "$BASE"

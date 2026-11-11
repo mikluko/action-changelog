@@ -46,58 +46,94 @@ type refSpan struct {
 
 func locate(src []byte) layout {
 	root := goldmark.New().Parser().Parse(text.NewReader(src))
-	var (
-		out     layout
-		entry   *entrySpan
-		section *sectionSpan
-	)
+	lc := locator{src: src, entry: -1, section: -1}
 	for n := root.FirstChild(); n != nil; n = n.NextSibling() {
-		if d, ok := n.(*ast.LinkReferenceDefinition); ok {
-			if s, e, ok := span(d); ok {
-				out.refs = append(out.refs, refSpan{
-					label: string(d.Label),
-					dest:  string(d.Destination),
-					start: lineStart(src, s),
-					end:   lineEnd(src, e),
-				})
-			}
-			continue
-		}
-		if h, ok := n.(*ast.Heading); ok && h.Level <= 2 {
-			section = nil
-			entry = nil
-			if h.Level == 2 {
-				if start := headingStart(src, h); start >= 0 {
-					end := lineEnd(src, start)
-					out.entries = append(out.entries, entrySpan{raw: headingText(src, h), head: start, headEnd: end, end: end})
-					entry = &out.entries[len(out.entries)-1]
-				}
-			}
-			continue
-		}
-		if entry == nil {
-			continue
-		}
-		if h, ok := n.(*ast.Heading); ok && h.Level == 3 {
-			if start := headingStart(src, h); start >= 0 {
-				end := lineEnd(src, start)
-				entry.sections = append(entry.sections, sectionSpan{name: headingText(src, h), head: start, headEnd: end, end: end})
-				section = &entry.sections[len(entry.sections)-1]
-				entry.end = end
-			}
-			continue
-		}
-		_, e, ok := span(n)
-		if !ok {
-			continue
-		}
-		e = lineEnd(src, e)
-		entry.end = max(entry.end, e)
-		if section != nil {
-			section.end = max(section.end, e)
-		}
+		lc.visit(n)
 	}
-	return out
+	return lc.out
+}
+
+// locator builds a layout one top-level node at a time; entry and section index
+// the ones open, or are -1.
+type locator struct {
+	src            []byte
+	out            layout
+	entry, section int
+}
+
+func (lc *locator) visit(n ast.Node) {
+	switch n := n.(type) {
+	case *ast.LinkReferenceDefinition:
+		lc.ref(n)
+	case *ast.Heading:
+		switch {
+		case n.Level <= 2:
+			lc.entryHeading(n)
+		case n.Level == 3:
+			lc.sectionHeading(n)
+		default:
+			lc.content(n)
+		}
+	default:
+		lc.content(n)
+	}
+}
+
+func (lc *locator) ref(d *ast.LinkReferenceDefinition) {
+	if s, e, ok := span(d); ok {
+		lc.out.refs = append(lc.out.refs, refSpan{
+			label: string(d.Label),
+			dest:  string(d.Destination),
+			start: lineStart(lc.src, s),
+			end:   lineEnd(lc.src, e),
+		})
+	}
+}
+
+// entryHeading closes the open entry; a level-2 heading opens the next, and a
+// level-1 heading leaves none open.
+func (lc *locator) entryHeading(h *ast.Heading) {
+	lc.entry, lc.section = -1, -1
+	if h.Level != 2 {
+		return
+	}
+	if start := headingStart(lc.src, h); start >= 0 {
+		end := lineEnd(lc.src, start)
+		lc.out.entries = append(lc.out.entries, entrySpan{raw: headingText(lc.src, h), head: start, headEnd: end, end: end})
+		lc.entry = len(lc.out.entries) - 1
+	}
+}
+
+func (lc *locator) sectionHeading(h *ast.Heading) {
+	if lc.entry < 0 {
+		return
+	}
+	start := headingStart(lc.src, h)
+	if start < 0 {
+		return
+	}
+	end := lineEnd(lc.src, start)
+	e := &lc.out.entries[lc.entry]
+	e.sections = append(e.sections, sectionSpan{name: headingText(lc.src, h), head: start, headEnd: end, end: end})
+	e.end = end
+	lc.section = len(e.sections) - 1
+}
+
+// content extends the open entry and section to the end of n.
+func (lc *locator) content(n ast.Node) {
+	if lc.entry < 0 {
+		return
+	}
+	_, end, ok := span(n)
+	if !ok {
+		return
+	}
+	end = lineEnd(lc.src, end)
+	e := &lc.out.entries[lc.entry]
+	e.end = max(e.end, end)
+	if lc.section >= 0 {
+		e.sections[lc.section].end = max(e.sections[lc.section].end, end)
+	}
 }
 
 // unreleased returns the index of the [Unreleased] entry, or -1.

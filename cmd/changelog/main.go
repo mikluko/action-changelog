@@ -71,7 +71,9 @@ func inspect() {
 	flag.Parse()
 
 	if *listChecks {
-		listRegister(os.Stdout)
+		if err := listRegister(os.Stdout); err != nil {
+			fail(err)
+		}
 		return
 	}
 	severities, err := severities(*asError, *asWarning, *asOff)
@@ -140,20 +142,28 @@ func run(path string, opts changelog.Options, log, annotations io.Writer) (*chan
 	}
 	doc := changelog.Parse(src)
 	findings := doc.Lint(opts)
-	report(path, findings, log, annotations)
+	if err := report(path, findings, log, annotations); err != nil {
+		return nil, nil, err
+	}
 	return doc, findings, nil
 }
 
 // report writes each finding about the file at path to log and, under GitHub
 // Actions, to annotations as a workflow command titled with the check's name.
-func report(path string, findings []changelog.Finding, log, annotations io.Writer) {
+func report(path string, findings []changelog.Finding, log, annotations io.Writer) error {
 	annotate := os.Getenv("GITHUB_ACTIONS") == "true"
 	for _, f := range findings {
-		fmt.Fprintf(log, "%s:%d: %s: %s (%s)\n", path, f.Line, f.Severity, f.Msg, f.Check)
-		if annotate {
-			fmt.Fprintf(annotations, "::%s file=%s,line=%d,title=%s::%s\n", f.Severity, path, f.Line, f.Check, f.Msg)
+		if _, err := fmt.Fprintf(log, "%s:%d: %s: %s (%s)\n", path, f.Line, f.Severity, f.Msg, f.Check); err != nil {
+			return err
+		}
+		if !annotate {
+			continue
+		}
+		if _, err := fmt.Fprintf(annotations, "::%s file=%s,line=%d,title=%s::%s\n", f.Severity, path, f.Line, f.Check, f.Msg); err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 // red reports whether anything found is bad enough to turn the build red.
@@ -286,8 +296,7 @@ func summarize(reason string) error {
 		return err
 	}
 	if _, err := fmt.Fprintln(f, reason); err != nil {
-		f.Close()
-		return err
+		return errors.Join(err, f.Close())
 	}
 	return f.Close()
 }
@@ -386,8 +395,7 @@ func emit(outs []output.Output, stdout io.Writer) error {
 		return err
 	}
 	if err := output.Write(f, outs); err != nil {
-		f.Close()
-		return err
+		return errors.Join(err, f.Close())
 	}
 	return f.Close()
 }
@@ -445,13 +453,17 @@ func threshold(s string) (changelog.Severity, error) {
 
 // listRegister prints every check and the severity it carries unless a flag
 // says otherwise.
-func listRegister(w io.Writer) {
+func listRegister(w io.Writer) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "CHECK\tDEFAULT\tDESCRIPTION")
-	for _, c := range changelog.Checks {
-		fmt.Fprintf(tw, "%s\t%s\t%s\n", c.Name, c.Default, c.Description)
+	if _, err := fmt.Fprintln(tw, "CHECK\tDEFAULT\tDESCRIPTION"); err != nil {
+		return err
 	}
-	tw.Flush()
+	for _, c := range changelog.Checks {
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\n", c.Name, c.Default, c.Description); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
 }
 
 // split reads a comma-separated flag value, dropping empty fields so a trailing

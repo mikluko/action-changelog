@@ -78,7 +78,7 @@ jobs:
           # spelled v<version>-<stage> names no stage of this version: either it
           # or the entry is wrong, and they have to agree.
           stage="${BASE#release/}"
-          stage="${stage#v$VERSION-}"
+          stage="${stage#"v$VERSION"-}"
           case "$BASE" in
             "release/v$VERSION-$stage") ;;
             *) echo "::error::$BASE names no stage of v$VERSION"; exit 1 ;;

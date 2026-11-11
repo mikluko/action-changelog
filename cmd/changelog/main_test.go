@@ -655,7 +655,9 @@ func collect(s string) (map[string]string, error) {
 // row of it.
 func TestListChecksPrintsTheRegister(t *testing.T) {
 	var out bytes.Buffer
-	listRegister(&out)
+	if err := listRegister(&out); err != nil {
+		t.Fatal(err)
+	}
 	for _, c := range changelog.Checks {
 		if !strings.Contains(out.String(), c.Name) {
 			t.Errorf("--list-checks omits %q", c.Name)

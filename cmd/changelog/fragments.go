@@ -78,7 +78,9 @@ func lintFragments(dir string, opts changelog.Options, log, annotations io.Write
 	if sev := severity(opts, changelog.CheckFragmentForm); sev != changelog.Off {
 		for _, p := range strays {
 			f := changelog.Finding{Check: changelog.CheckFragmentForm, Severity: sev, Line: 1, Msg: "not a fragment: a fragment is a file named *.md"}
-			report(p, []changelog.Finding{f}, log, annotations)
+			if err := report(p, []changelog.Finding{f}, log, annotations); err != nil {
+				return nil, err
+			}
 			all = append(all, f)
 		}
 	}
@@ -88,7 +90,9 @@ func lintFragments(dir string, opts changelog.Options, log, annotations io.Write
 			return nil, err
 		}
 		findings := changelog.LintFragment(src, opts)
-		report(p, findings, log, annotations)
+		if err := report(p, findings, log, annotations); err != nil {
+			return nil, err
+		}
 		all = append(all, findings...)
 	}
 	return all, nil
@@ -157,8 +161,7 @@ func forecast(path, dir string, opts changelog.Options, current []changelog.Find
 			}
 		}
 	}
-	report(path, out, log, annotations)
-	return out, nil
+	return out, report(path, out, log, annotations)
 }
 
 // missingFragment reports a missing-fragment finding against the changelog at
@@ -183,8 +186,7 @@ func missingFragment(path, dir, base string, opts changelog.Options, log, annota
 		return nil, nil
 	}
 	out := []changelog.Finding{{Check: changelog.CheckMissingFragment, Severity: sev, Line: 1, Msg: msg}}
-	report(path, out, log, annotations)
-	return out, nil
+	return out, report(path, out, log, annotations)
 }
 
 // carriesNoNotes returns why the pull request carries no notes, or "" where a
