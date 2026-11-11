@@ -10,7 +10,7 @@ annotation, so a failing check lands on the offending line of the diff.
 - uses: actions/checkout@v5
   with:
     fetch-depth: 0
-- uses: mikluko/action-changelog/actions/validate@v2
+- uses: mikluko/action-changelog@v1
   with:
     changelog: CHANGELOG.md
 ```
@@ -21,16 +21,13 @@ default checkout is shallow and carries none, and `no-git-tags` fires.
 On Forgejo the same step names the action by its full URL:
 
 ```yaml
-- uses: https://sarak.sh/mikluko/changelog/actions/validate@v2
+- uses: https://sarak.sh/mikluko/changelog@v1
 ```
 
 The action is developed at
 [sarak.sh/mikluko/changelog](https://sarak.sh/mikluko/changelog),
 and [`mikluko/action-changelog`](https://github.com/mikluko/action-changelog) on
 GitHub is its mirror, carrying the same tags and releases.
-
-Each action lives in a directory of its own under `actions/`: `validate` reads
-the changelog, and [`append` and `release`](#writing-the-changelog) write it.
 
 A composite action that downloads a static binary from its release and runs it.
 It runs on Linux and macOS runners, X64 or ARM64, and needs bash, curl, and
@@ -161,7 +158,7 @@ It says nothing about `valid`: under `fail-on: never` a workflow reads both.
 
 ```yaml
 - id: changelog
-  uses: mikluko/action-changelog/actions/validate@v2
+  uses: mikluko/action-changelog@v1
 - if: steps.changelog.outputs.due == 'true'
   env:
     VERSION: ${{ steps.changelog.outputs.version }}
@@ -367,7 +364,7 @@ workflow's to do. Every byte outside the lines they write is preserved.
 Adds a note under a section of the `[Unreleased]` entry:
 
 ```yaml
-- uses: mikluko/action-changelog/actions/append@v2
+- uses: mikluko/action-changelog/append@v1
   with:
     section: Fixed
     note: The parser no longer reads a fenced heading as an entry.
@@ -390,7 +387,7 @@ Turns the `[Unreleased]` entry into a versioned one and opens a new, empty
 `[Unreleased]` above it:
 
 ```yaml
-- uses: mikluko/action-changelog/actions/release@v2
+- uses: mikluko/action-changelog/release@v1
   id: release
 ```
 
@@ -452,7 +449,7 @@ The reader checks them when given the directory, reporting each finding against
 the fragment's own file:
 
 ```yaml
-- uses: mikluko/action-changelog/actions/validate@v2
+- uses: mikluko/action-changelog@v1
   with:
     fragments: .changelog
 ```
@@ -466,7 +463,7 @@ The release action, given the same directory, folds every fragment into
 deletes the fragments it folded:
 
 ```yaml
-- uses: mikluko/action-changelog/actions/release@v2
+- uses: mikluko/action-changelog/release@v1
   with:
     fragments: .changelog
 ```
@@ -527,8 +524,8 @@ request, in two places a test holds together:
 1. `CHANGELOG.md` gains `## [1.2.3] - YYYY-MM-DD` above the previous entry.
    `go run ./cmd/changelog release -fragments .changelog` writes it, folding the
    fragments pull requests have left in `.changelog/` and deleting them.
-2. `actions/validate/action.yaml`, `actions/append/action.yaml` and
-   `actions/release/action.yaml` set `VERSION: 1.2.3` on their `install` step.
+2. `action.yaml`, `append/action.yaml` and `release/action.yaml` set
+   `VERSION: 1.2.3` on their `install` step.
 
 `go test ./...` fails while those disagree. Merging is the whole of it. The
 release workflow on Forgejo runs the action against this repository's own

@@ -112,11 +112,11 @@ runs:
         # and to the tag being cut. A workflow pinning this action by SHA
         # therefore runs the binary built for the release that commit belongs
         # to, with nothing rewritten after the fact.
-        VERSION: 2.0.0
+        VERSION: 1.6.0
         OS: ${{ runner.os }}
         ARCH: ${{ runner.arch }}
         ACTION_PATH: ${{ github.action_path }}
-      run: bash "$ACTION_PATH/../install.sh"
+      run: bash "$ACTION_PATH/install.sh"
     - id: run
       shell: bash
       env:

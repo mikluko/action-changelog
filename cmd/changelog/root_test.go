@@ -6,7 +6,7 @@ import (
 )
 
 // TestMain runs the tests from the repository root, which is where the files
-// they hold to the code live: actions/, CHANGELOG.md and examples/.
+// they hold to the code live: action.yaml, CHANGELOG.md and examples/.
 func TestMain(m *testing.M) {
 	if err := os.Chdir("../.."); err != nil {
 		panic(err)

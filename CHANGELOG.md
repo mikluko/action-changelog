@@ -7,28 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.0.0] - 2026-11-11
-
-### Added
-
-- **Fragments**: notes kept as `*.md` files in a directory of their own,
-  `.changelog/` by convention, rather than under `[Unreleased]`, so pull
-  requests adding notes do not conflict. The `fragments` input of the `release`
-  action folds them into `[Unreleased]` before releasing it and deletes them;
-  the `fragments` input of the reader checks them.
-- `fragment-form` check, for a file in the fragments directory that is not a
-  fragment.
-- `-fragments` flag of the command and of its `release` subcommand.
-
-### Changed
-
-- **Breaking:** every action lives under `actions/`. The reader moves from the
-  repository root to `actions/validate`, and the writers from `append` and
-  `release` to `actions/append` and `actions/release`:
-  `mikluko/action-changelog/actions/validate@v2`, or
-  `https://sarak.sh/mikluko/changelog/actions/validate@v2` on Forgejo.
-  `@v1` keeps the old paths.
-
 ## [1.6.0] - 2026-10-31
 
 ### Added
@@ -359,8 +337,7 @@ recorded separately: nothing consumed them but this repository.
   candidate can be pulled and tested before it merges, and one reaching `main`
   is refused rather than published.
 
-[Unreleased]: https://github.com/mikluko/action-changelog/compare/v2.0.0...HEAD
-[2.0.0]: https://github.com/mikluko/action-changelog/compare/v1.6.0...v2.0.0
+[Unreleased]: https://github.com/mikluko/action-changelog/compare/v1.6.0...HEAD
 [1.6.0]: https://github.com/mikluko/action-changelog/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/mikluko/action-changelog/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/mikluko/action-changelog/compare/v1.3.1...v1.4.0

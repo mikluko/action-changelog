@@ -142,7 +142,7 @@ jobs:
       - name: Run the published action
         id: smoke
         if: steps.cut.outputs.due == 'true'
-        uses: ./actions/validate
+        uses: ./
 
       - name: The published action reads the release just cut
         if: steps.cut.outputs.due == 'true'
@@ -164,7 +164,7 @@ jobs:
 
       - name: Run the published append action
         if: steps.cut.outputs.due == 'true'
-        uses: ./actions/append
+        uses: ./append
         with:
           changelog: ${{ runner.temp }}/CHANGELOG.md
           section: Added
@@ -173,7 +173,7 @@ jobs:
       - name: Run the published release action
         id: smoke-release
         if: steps.cut.outputs.due == 'true'
-        uses: ./actions/release
+        uses: ./release
         with:
           changelog: ${{ runner.temp }}/CHANGELOG.md
 
