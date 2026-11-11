@@ -41,9 +41,14 @@ jobs:
       # rather than by the last release of that code. prerelease-entry stays off
       # here: a release candidate is what a pull request is allowed to name, and
       # main is where it is refused.
+      #
+      # A pull request has to add a fragment, and on a push to main, where no
+      # base branch is named, missing-fragment is silent.
       - name: Validate the changelog
         id: changelog
-        run: go run ./cmd/changelog -changelog CHANGELOG.md -fragments .changelog
+        env:
+          BASE: ${{ github.base_ref }}
+        run: go run ./cmd/changelog -changelog CHANGELOG.md -fragments .changelog -base "$BASE"
 
       # The values reach the script through the environment and never through
       # ${{ }} expansion: they come from a file the pull request author wrote.
@@ -57,9 +62,9 @@ jobs:
           if [ -z "$VERSION" ]; then
             echo "The changelog names no version." >>"$GITHUB_STEP_SUMMARY"
           elif [ "$PRERELEASE" = true ]; then
-            echo "Names the candidate **v$VERSION**. Promote it to a final version before merging: main refuses a pre-release." >>"$GITHUB_STEP_SUMMARY"
+            echo "Names the candidate **v$VERSION**, which the release workflow refuses: promote it to a final version." >>"$GITHUB_STEP_SUMMARY"
           elif [ "$TAGGED" = false ]; then
-            echo "Merging cuts **v$VERSION**." >>"$GITHUB_STEP_SUMMARY"
+            echo "Names **v$VERSION**, untagged: the next release dispatch cuts it." >>"$GITHUB_STEP_SUMMARY"
           else
-            echo "No release: **v$VERSION** is already tagged." >>"$GITHUB_STEP_SUMMARY"
+            echo "Merging adds its fragments to the release after **v$VERSION**." >>"$GITHUB_STEP_SUMMARY"
           fi

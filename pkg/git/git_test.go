@@ -535,3 +535,43 @@ func TestTagDayIsInTheTagsOwnZone(t *testing.T) {
 		t.Errorf("v1.1.0 was cut on %q, want 2026-03-02; UTC would say 2026-03-01", got)
 	}
 }
+
+// The merge base, not the target's tip, is what a pull request's fragments are
+// read against: a fragment the target has since folded and deleted was still
+// there when the branch forked, so the branch did not add it.
+func TestFilesAtMergeBaseReadsTheForkPoint(t *testing.T) {
+	dir := repo(t)
+	if err := os.Mkdir(filepath.Join(dir, ".changelog"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, ".changelog/old.md", "x\n")
+	run(t, dir, "add", ".")
+	run(t, dir, "commit", "-m", "an old fragment")
+	run(t, dir, "switch", "-c", "feature")
+	write(t, dir, ".changelog/new.md", "x\n")
+	run(t, dir, "add", ".")
+	run(t, dir, "commit", "-m", "a new fragment")
+	run(t, dir, "switch", "main")
+	run(t, dir, "rm", "-q", ".changelog/old.md")
+	run(t, dir, "commit", "-m", "a release folds the old fragment")
+	run(t, dir, "switch", "feature")
+
+	r, err := git.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := r.FilesAtMergeBase("main", ".changelog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, ",") != "old.md" {
+		t.Errorf("files at the merge base are %v, want [old.md]", got)
+	}
+
+	if got, err := r.FilesAtMergeBase("main", "absent"); err != nil || len(got) != 0 {
+		t.Errorf("an absent directory gives %v, %v", got, err)
+	}
+	if _, err := r.FilesAtMergeBase("nowhere", ".changelog"); err == nil {
+		t.Error("no error for a base that names nothing")
+	}
+}

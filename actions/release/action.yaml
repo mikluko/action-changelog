@@ -12,10 +12,10 @@ inputs:
   fragments:
     description: >-
       Directory of fragments to fold into the Unreleased entry before
-      releasing it, relative to the workspace, as in .changelog. Each is
-      deleted once folded. Empty folds none.
+      releasing it, relative to the workspace. Each is deleted once folded.
+      Empty folds none.
     required: false
-    default: ""
+    default: .changelog
   version:
     description: >-
       The version to release, as in 1.2.3. Empty computes it from the newest
@@ -51,7 +51,6 @@ runs:
     - id: install
       shell: bash
       env:
-        VERSION: 1.6.0
         OS: ${{ runner.os }}
         ARCH: ${{ runner.arch }}
         ACTION_PATH: ${{ github.action_path }}

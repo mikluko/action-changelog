@@ -109,6 +109,7 @@ One input, on one of the four.
 | | `ci` | `release-candidate` | `release` | `publish` |
 |---|---|---|---|---|
 | `sections` | the six plus `Breaking` | the six plus `Breaking` | the six plus `Breaking` | the six plus `Breaking` |
+| `fragments` | *(empty)* | *(empty)* | *(empty)* | *(empty)* |
 | `error` | `prerelease-entry` | `prerelease-entry` | `prerelease-entry` | `prerelease-entry` |
 | `off` | `undated-entry` | `undated-entry` | *(unset)* | `undated-entry` |
 | `reference-tags` | *(default)* | `final` | *(default)* | *(default)* |

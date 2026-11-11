@@ -4,6 +4,8 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+
+	"sarak.sh/mikluko/changelog/pkg/semver"
 )
 
 func TestParseFragment(t *testing.T) {
@@ -106,5 +108,31 @@ func TestFoldNothing(t *testing.T) {
 	got[0] = 'X'
 	if src[0] == 'X' {
 		t.Error("Fold returned src itself")
+	}
+}
+
+func TestReleaseFragments(t *testing.T) {
+	src := head + "## [Unreleased]\n\n## [1.0.0] - 2020-01-01\n\n- x\n"
+	frag, err := ParseFragment([]byte("### Added\n\n- a\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, v, err := ReleaseFragments([]byte(src), []Fragment{frag}, nil, "2020-02-02")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.String() != "1.1.0" {
+		t.Errorf("version %s, want 1.1.0", v)
+	}
+	if want := head + "## [Unreleased]\n\n## [1.1.0] - 2020-02-02\n\n### Added\n\n- a\n\n## [1.0.0] - 2020-01-01\n\n- x\n"; string(got) != want {
+		t.Errorf("got:\n%s", got)
+	}
+
+	given := semver.Version{Major: 2}
+	if _, v, err := ReleaseFragments([]byte(src), []Fragment{frag}, &given, "2020-02-02"); err != nil || v.String() != "2.0.0" {
+		t.Errorf("given 2.0.0: %v, %v", v, err)
+	}
+	if _, _, err := ReleaseFragments([]byte(src), nil, nil, "2020-02-02"); err == nil {
+		t.Error("no error with nothing to release")
 	}
 }

@@ -26,7 +26,6 @@ runs:
     - id: install
       shell: bash
       env:
-        VERSION: 1.6.0
         OS: ${{ runner.os }}
         ARCH: ${{ runner.arch }}
         ACTION_PATH: ${{ github.action_path }}

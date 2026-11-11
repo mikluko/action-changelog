@@ -1,10 +1,11 @@
 name: Release
 
-# The changelog decides. A push to main whose newest versioned entry carries no
-# tag cuts that release, and nothing else does: a tag pushed by hand is not a
-# path here, which is the thesis this action exists to serve.
+# The changelog decides, and a release is asked for by hand. A dispatch folds
+# the fragments pull requests have left in .changelog/ into CHANGELOG.md,
+# validates the result, commits it to main and cuts the tag the changelog then
+# names. Nothing else cuts a tag here, and a tag pushed by hand is not a path.
 #
-# A pre-release reaching main means a candidate was merged rather than
+# A pre-release reaching main means a candidate was released rather than
 # promoted, and this refuses it.
 #
 # The refusal reads the prerelease output rather than raising the
@@ -14,18 +15,30 @@ name: Release
 # after the first candidate shipped. The output is a fact about the entry being
 # released.
 #
-# One workflow rather than two, and that is forced rather than chosen. A tag
-# pushed with the automatic token does not trigger another workflow, so a job
-# that cut the tag and a separate job triggered by that tag would wait on each
-# other forever.
+# One workflow rather than two, and that is forced rather than chosen. A commit
+# or tag pushed with the automatic token does not trigger another workflow, so
+# a job that pushed the release commit and a separate job triggered by it would
+# wait on each other forever.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to release. Empty computes it from the notes.
+        required: false
+        default: ""
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: Refuse a branch other than main
+        if: github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error::a release is cut from main, not $REF"
+          exit 1
+
       - uses: https://github.com/actions/checkout@v5
         with:
           # The reference tag is the newest one reachable from HEAD, so the
@@ -38,47 +51,67 @@ jobs:
       # This repository consumes its own action, built from source rather than
       # downloaded. The binary for the release being cut does not exist yet,
       # and a published one would be the previous version reading this commit.
-      - name: Read the changelog
+      #
+      # A newest entry already due is a release commit that reached main and
+      # was never tagged, because a run failed after pushing it. This run then
+      # resumes at the tag rather than folding again.
+      - name: Read the changelog as main has it
+        id: before
+        run: go run ./cmd/changelog -changelog CHANGELOG.md -fragments .changelog -fail-on never
+
+      - name: Fold the fragments into a release
+        id: fold
+        if: steps.before.outputs.due != 'true'
+        env:
+          VERSION: ${{ inputs.version }}
+        run: go run ./cmd/changelog release -changelog CHANGELOG.md -fragments .changelog -version "$VERSION"
+
+      - name: Name the release in actions/VERSION
+        if: steps.before.outputs.due != 'true'
+        env:
+          VERSION: ${{ steps.fold.outputs.version }}
+        run: printf '%s\n' "$VERSION" >actions/VERSION
+
+      # The changelog the release commit carries, held to every check before it
+      # is committed.
+      - name: Validate the changelog
         id: changelog
-        run: go run ./cmd/changelog -changelog CHANGELOG.md
+        run: go run ./cmd/changelog -changelog CHANGELOG.md -fragments .changelog
 
       # The action reports; this decides. It is the only place a tag spelling is
       # chosen, which is why the action emits none.
       - name: Whether a release is due
         id: cut
         env:
-          VALID: ${{ steps.changelog.outputs.valid }}
+          DUE: ${{ steps.changelog.outputs.due }}
+          REASON: ${{ steps.changelog.outputs['due-reason'] }}
           VERSION: ${{ steps.changelog.outputs.version }}
-          TAGGED: ${{ steps.changelog.outputs.already-tagged }}
           PRERELEASE: ${{ steps.changelog.outputs.prerelease }}
         run: |
           if [ "$PRERELEASE" = true ]; then
-            echo "::error::the newest entry names $VERSION, a pre-release. Promote it to a final version before merging."
+            echo "::error::the release names $VERSION, a pre-release. Release a final version from main."
             exit 1
           fi
-          if [ "$VALID" != true ] || [ "$TAGGED" != false ] || [ -z "$VERSION" ]; then
-            echo "due=false" >>"$GITHUB_OUTPUT"
-            echo "nothing to cut: valid=$VALID already-tagged=$TAGGED version=${VERSION:-none}"
-            exit 0
+          if [ "$DUE" != true ]; then
+            echo "::error::nothing to release: $REASON"
+            exit 1
           fi
           echo "due=true" >>"$GITHUB_OUTPUT"
           echo "version=$VERSION" >>"$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >>"$GITHUB_OUTPUT"
           echo "major=v${VERSION%%.*}" >>"$GITHUB_OUTPUT"
 
-      # The tag about to be cut and the release action.yaml downloads are held
-      # to the changelog before anything is published, while backing out is
-      # still free.
-      - name: Hold the tag and action.yaml to the changelog
-        if: steps.cut.outputs.due == 'true'
+      # The whole suite, on the tree the release commit carries: the tag about
+      # to be cut, actions/VERSION and the changelog are held to each other, and
+      # the documented invocations to the major, while backing out is free.
+      - name: Test the release commit
         env:
           GITHUB_REF_NAME: ${{ steps.cut.outputs.tag }}
-        run: go test -run TestVersionMatchesTheChangelog ./cmd/changelog
+        run: go test ./...
 
-      # The asset names and the checksums.txt format are what action.yaml
+      # The asset names and the checksums.txt format are what install.sh
       # downloads and verifies.
       - name: Build the binaries
-        if: steps.cut.outputs.due == 'true'
         run: |
           dist="$RUNNER_TEMP/dist"
           mkdir -p "$dist"
@@ -88,13 +121,25 @@ jobs:
           done
           (cd "$dist" && sha256sum changelog_* >checksums.txt)
 
+      # A push refused because main moved since the checkout publishes nothing;
+      # dispatching again folds onto the new main.
+      - name: Commit the release to main
+        if: steps.before.outputs.due != 'true'
+        env:
+          VERSION: ${{ steps.cut.outputs.version }}
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@noreply.sarak.sh"
+          git commit -am "release: $VERSION"
+          git push origin HEAD:refs/heads/main
+
       - name: Cut the tag
-        if: steps.cut.outputs.due == 'true'
         env:
           TAG: ${{ steps.cut.outputs.tag }}
         run: |
           git tag "$TAG"
           git push origin "refs/tags/$TAG"
+
 
       # notes is the entry body verbatim, which is what the release page wants
       # and the one output whose value is prose rather than a fact about a tag.
@@ -142,7 +187,7 @@ jobs:
       - name: Run the published action
         id: smoke
         if: steps.cut.outputs.due == 'true'
-        uses: ./
+        uses: ./actions/validate
 
       - name: The published action reads the release just cut
         if: steps.cut.outputs.due == 'true'
@@ -164,7 +209,7 @@ jobs:
 
       - name: Run the published append action
         if: steps.cut.outputs.due == 'true'
-        uses: ./append
+        uses: ./actions/append
         with:
           changelog: ${{ runner.temp }}/CHANGELOG.md
           section: Added
@@ -173,7 +218,7 @@ jobs:
       - name: Run the published release action
         id: smoke-release
         if: steps.cut.outputs.due == 'true'
-        uses: ./release
+        uses: ./actions/release
         with:
           changelog: ${{ runner.temp }}/CHANGELOG.md
 

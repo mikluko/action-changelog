@@ -44,7 +44,7 @@ func releaseCmd(args []string, stdout, stderr io.Writer, now func() time.Time) e
 	fs.SetOutput(stderr)
 	var (
 		path      = fs.String("changelog", "CHANGELOG.md", "path to the changelog")
-		fragments = fs.String("fragments", "", "directory of fragments to fold into [Unreleased] and delete; none when empty")
+		fragments = fs.String("fragments", ".changelog", "directory of fragments to fold into [Unreleased] and delete; none when empty")
 		version   = fs.String("version", "", "version to release; computed from the notes when empty")
 		date      = fs.String("date", "", "release date as YYYY-MM-DD; today in UTC when empty")
 		open      = fs.Bool("open", false, "write an open entry, naming the version and no date")
@@ -66,22 +66,19 @@ func releaseCmd(args []string, stdout, stderr io.Writer, now func() time.Time) e
 		day = now().UTC().Format("2006-01-02")
 	}
 
+	given, err := releaseVersion(*version)
+	if err != nil {
+		return err
+	}
 	consumed, frags, err := readFragments(*fragments)
 	if err != nil {
 		return err
 	}
 	var released semver.Version
 	err = rewrite(*path, func(src []byte) ([]byte, error) {
-		src, err := changelog.Fold(src, frags...)
-		if err != nil {
-			return nil, err
-		}
-		v, err := releaseVersion(changelog.Parse(src), *version)
-		if err != nil {
-			return nil, err
-		}
+		out, v, err := changelog.ReleaseFragments(src, frags, given, day)
 		released = v
-		return changelog.Release(src, v, day)
+		return out, err
 	})
 	if err != nil {
 		return err
@@ -111,12 +108,16 @@ func releaseOutputs(v semver.Version, notes string) []output.Output {
 }
 
 // releaseVersion is the version given, read without the leading "v" a tag
-// carries, or the one doc's notes call for when none is.
-func releaseVersion(doc *changelog.Changelog, given string) (semver.Version, error) {
+// carries, or nil where none is, which leaves it to the notes.
+func releaseVersion(given string) (*semver.Version, error) {
 	if given = strings.TrimSpace(given); given == "" {
-		return doc.Next()
+		return nil, nil
 	}
-	return semver.Parse(strings.TrimPrefix(given, "v"))
+	v, err := semver.Parse(strings.TrimPrefix(given, "v"))
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
 }
 
 // rewrite applies edit to the file at path and writes the result back with the

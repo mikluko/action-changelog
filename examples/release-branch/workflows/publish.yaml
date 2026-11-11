@@ -23,9 +23,11 @@ jobs:
         with:
           fetch-depth: 0
       - id: changelog
-        uses: mikluko/action-changelog@v1
+        uses: mikluko/action-changelog/actions/validate@v2
         with:
           sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
+          # Notes are written into CHANGELOG.md, not into fragments.
+          fragments: ""
           error: prerelease-entry
           # This is the invocation a repository forgets. It runs on the
           # candidate tags a branch cuts, and at that moment the newest entry is

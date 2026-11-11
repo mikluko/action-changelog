@@ -17,16 +17,16 @@ import (
 // The two references a workflow resolves this action by: the GitHub mirror,
 // and the Forgejo repository it is developed in.
 const (
-	action        = "mikluko/action-changelog@"
-	forgejoAction = "https://sarak.sh/mikluko/changelog@"
+	action        = "mikluko/action-changelog/actions/validate@"
+	forgejoAction = "https://sarak.sh/mikluko/changelog/actions/validate@"
 )
 
 // actions is every reference a documented invocation may use: the reader at
 // the root and each writer in its subdirectory, under either name.
 var actions = []string{
 	action, forgejoAction,
-	"mikluko/action-changelog/append@", "https://sarak.sh/mikluko/changelog/append@",
-	"mikluko/action-changelog/release@", "https://sarak.sh/mikluko/changelog/release@",
+	"mikluko/action-changelog/actions/append@", "https://sarak.sh/mikluko/changelog/actions/append@",
+	"mikluko/action-changelog/actions/release@", "https://sarak.sh/mikluko/changelog/actions/release@",
 }
 
 // actionFile is the part of action.yaml the tests hold to the code.
@@ -53,9 +53,9 @@ var actionFiles = []struct {
 	path    string
 	outputs []output.Output
 }{
-	{"action.yaml", outputs(changelog.Parse(nil), repoState{}, nil, "")},
-	{"append/action.yaml", nil},
-	{"release/action.yaml", releaseOutputs(semver.Version{}, "")},
+	{"actions/validate/action.yaml", outputs(changelog.Parse(nil), repoState{}, nil, "")},
+	{"actions/append/action.yaml", nil},
+	{"actions/release/action.yaml", releaseOutputs(semver.Version{}, "")},
 }
 
 // readAction returns the action at path, the step installing the binary, and
@@ -80,26 +80,28 @@ func readAction(t *testing.T, path string) (action actionFile, install, run acti
 }
 
 // TestVersionMatchesTheChangelog holds the two places a release names itself to
-// one version: CHANGELOG.md, and the release action.yaml downloads the binary
-// from.
+// one version: CHANGELOG.md, and actions/VERSION, the release every action
+// downloads its binary from.
 //
-// Both are written together in the release pull request, before the tag exists,
-// because action.yaml has to name an immutable release at the moment it is
-// committed: a workflow pinning this action by SHA reads that file as it stands
-// at that commit, and nothing can be rewritten onto it afterwards. Under the
-// release workflow the tag being cut joins them, which is the last moment a
-// mismatch can be caught for free.
+// Both are written in the one release commit, before the tag exists, because
+// an action has to name an immutable release at the moment it is committed: a
+// workflow pinning it by SHA reads the files as they stand at that commit, and
+// nothing can be rewritten onto it afterwards. Under the release workflow the
+// tag being cut joins them, which is the last moment a mismatch can be caught
+// for free.
 func TestVersionMatchesTheChangelog(t *testing.T) {
 	latest, ok := changelog.Parse(read(t, "CHANGELOG.md")).Latest()
 	if !ok {
 		t.Fatal("CHANGELOG.md names no released version")
 	}
 
+	if got, want := strings.TrimSpace(string(read(t, "actions/VERSION"))), strings.TrimPrefix(latest.Version, "v"); got != want {
+		t.Errorf("actions/VERSION names release %q, CHANGELOG.md's newest released entry is %s", got, latest.Version)
+	}
 	for _, a := range actionFiles {
 		_, install, _ := readAction(t, a.path)
-		if got, want := install.Env["VERSION"], strings.TrimPrefix(latest.Version, "v"); got != want {
-			t.Errorf("%s downloads release %q, CHANGELOG.md's newest released entry is %s",
-				a.path, got, latest.Version)
+		if v, ok := install.Env["VERSION"]; ok {
+			t.Errorf("%s sets VERSION to %q; install.sh reads the release from actions/VERSION", a.path, v)
 		}
 	}
 
@@ -110,12 +112,12 @@ func TestVersionMatchesTheChangelog(t *testing.T) {
 	}
 }
 
-// Every action installs the binary with the one script at the repository root,
-// reached from the action's own directory.
+// Every action installs the binary with the one script in actions/, reached
+// from the action's own directory.
 func TestActionInstallsWithTheSharedScript(t *testing.T) {
 	for _, a := range actionFiles {
 		_, install, _ := readAction(t, a.path)
-		rel, err := filepath.Rel(filepath.Dir(a.path), "install.sh")
+		rel, err := filepath.Rel(filepath.Dir(a.path), "actions/install.sh")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -176,16 +178,15 @@ func TestActionDeclaresEveryOutput(t *testing.T) {
 	}
 }
 
-// Every documented invocation names the major tag the release workflow moves.
+// Every documented invocation names the major tag the release workflow moves:
+// that of the release the pending fragments call for, or of the newest entry
+// where there are none, so a breaking change documents its major in the pull
+// request that makes it.
 // A reference the repository carries no tag for fails on the uses: line before
 // the action runs, so a reader copying one gets a broken workflow rather than
 // an old one.
 func TestDocumentedInvocationsNameTheCurrentMajor(t *testing.T) {
-	latest, ok := changelog.Parse(read(t, "CHANGELOG.md")).Latest()
-	if !ok {
-		t.Fatal("CHANGELOG.md names no released version")
-	}
-	major := latest.Semver.MajorTag()
+	major := pendingMajor(t)
 
 	var found int
 	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
@@ -227,6 +228,33 @@ func TestDocumentedInvocationsNameTheCurrentMajor(t *testing.T) {
 	if found == 0 {
 		t.Fatalf("no invocation of %q found; this test is checking nothing", actions)
 	}
+}
+
+// pendingMajor is the major tag of the release folding .changelog/ would cut,
+// or of the newest entry where .changelog/ holds no fragments.
+func pendingMajor(t *testing.T) string {
+	t.Helper()
+	src := read(t, "CHANGELOG.md")
+	_, frags, err := readFragments(".changelog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(frags) > 0 {
+		folded, err := changelog.Fold(src, frags...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		next, err := changelog.Parse(folded).Next()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return next.MajorTag()
+	}
+	latest, ok := changelog.Parse(src).Latest()
+	if !ok {
+		t.Fatal("CHANGELOG.md names no released version")
+	}
+	return latest.Semver.MajorTag()
 }
 
 func read(t *testing.T, name string) []byte {

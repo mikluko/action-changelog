@@ -60,13 +60,15 @@ const (
 	CheckOCIIncompatible   = "oci-incompatible-version"
 	CheckUndatedEntry      = "undated-entry"
 	CheckFragmentForm      = "fragment-form"
+	CheckFragmentsRelease  = "fragments-release"
 
-	// These five read the repository rather than the document alone.
+	// These read the repository rather than the document alone.
 	CheckUndatedRelease          = "undated-release"
 	CheckNoGitTags               = "no-git-tags"
 	CheckVersionBehindTag        = "version-behind-tag"
 	CheckReleaseEntryModified    = "release-entry-modified"
 	CheckPrereleaseEntryModified = "prerelease-entry-modified"
+	CheckMissingFragment         = "missing-fragment"
 )
 
 // Check is one thing the linter looks for.
@@ -167,6 +169,11 @@ var Checks = []Check{
 		Default:     Error,
 	},
 	{
+		Name:        CheckFragmentsRelease,
+		Description: "Folding the fragments into [Unreleased] and releasing it today, at the version its notes call for, gives a changelog that raises nothing the changelog as it stands does not. Silent where there is nothing to release, and where no fragments directory is given.",
+		Default:     Error,
+	},
+	{
 		Name:        CheckUndatedRelease,
 		Description: "The newest entry states a date, where a final tag already names its version. The release shipped and nobody dated it. A candidate tag is not one: it ships undated, which is what a stabilization branch is for.",
 		Default:     Error,
@@ -189,6 +196,11 @@ var Checks = []Check{
 	{
 		Name:        CheckPrereleaseEntryModified,
 		Description: "A released pre-release entry is unchanged since the reference tag.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckMissingFragment,
+		Description: "A pull request adds a fragment: the fragments directory holds a file its merge base with the base branch does not. Silent where no base branch is given, which is outside a pull request, and where no fragments directory is.",
 		Default:     Error,
 	},
 }

@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
-# Downloads the release binary named by VERSION for this runner, verifies it
-# against the release's checksums.txt, and writes its path to GITHUB_OUTPUT as
-# bin. Every action in this repository runs it before running the binary.
+# Downloads the release binary named by the VERSION file beside it for this
+# runner, verifies it against the release's checksums.txt, and writes its path
+# to GITHUB_OUTPUT as bin. Every action in this repository runs it before
+# running the binary.
+#
+# VERSION is the release the commit belongs to, which
+# TestVersionMatchesTheChangelog holds to the changelog's newest entry and to
+# the tag being cut. A workflow pinning an action by SHA therefore runs the
+# binary built for that commit's release, with nothing rewritten after the fact.
 set -euo pipefail
-: "${VERSION:?}" "${OS:?}" "${ARCH:?}"
+: "${OS:?}" "${ARCH:?}"
+VERSION=$(<"$(dirname "${BASH_SOURCE[0]}")/VERSION")
 
 case "$OS" in
   Linux) os=linux ;;

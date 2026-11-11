@@ -9,6 +9,8 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
+
+	"sarak.sh/mikluko/changelog/pkg/semver"
 )
 
 // Fragment is a file of notes waiting to be folded into the [Unreleased] entry:
@@ -199,4 +201,26 @@ func kindName(n ast.Node) string {
 		return "link reference definition"
 	}
 	return strings.ToLower(n.Kind().String())
+}
+
+// ReleaseFragments folds frags into the [Unreleased] entry and releases it as
+// Release does, at version or, where version is nil, at the version Next calls
+// for. It returns the edited document and the version released; src is not
+// modified.
+func ReleaseFragments(src []byte, frags []Fragment, version *semver.Version, date string) ([]byte, semver.Version, error) {
+	folded, err := Fold(src, frags...)
+	if err != nil {
+		return nil, semver.Version{}, err
+	}
+	var v semver.Version
+	if version != nil {
+		v = *version
+	} else if v, err = Parse(folded).Next(); err != nil {
+		return nil, semver.Version{}, err
+	}
+	out, err := Release(folded, v, date)
+	if err != nil {
+		return nil, semver.Version{}, err
+	}
+	return out, v, nil
 }

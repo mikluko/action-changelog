@@ -465,3 +465,70 @@ func common(dot string) (string, error) {
 	}
 	return filepath.Clean(target), nil
 }
+
+// FilesAtMergeBase returns the names of the files directly in dir, a path
+// relative to Root, in the tree of the merge base of HEAD and base.
+//
+// Base is a branch as a pull request names its target, as in main, and is
+// looked up as origin's remote-tracking branch before a local one; a full
+// reference name or a commit hash is taken as it is. A dir the merge base does
+// not carry holds no files. A checkout too shallow to reach the merge base is
+// an error.
+func (r *Repo) FilesAtMergeBase(base, dir string) ([]string, error) {
+	head, err := storer.ResolveReference(r.store, plumbing.HEAD)
+	if err != nil {
+		return nil, fmt.Errorf("HEAD: %w", err)
+	}
+	ours, err := object.GetCommit(r.store, head.Hash())
+	if err != nil {
+		return nil, fmt.Errorf("HEAD at %s: %w", head.Hash(), err)
+	}
+	h, err := r.resolve(base)
+	if err != nil {
+		return nil, err
+	}
+	theirs, err := object.GetCommit(r.store, h)
+	if err != nil {
+		return nil, fmt.Errorf("%s at %s: %w", base, h, err)
+	}
+	bases, err := ours.MergeBase(theirs)
+	if err != nil {
+		return nil, fmt.Errorf("the merge base of HEAD and %s: %w", base, err)
+	}
+	if len(bases) == 0 {
+		return nil, fmt.Errorf("HEAD and %s share no history this checkout carries", base)
+	}
+	tree, err := bases[0].Tree()
+	if err != nil {
+		return nil, err
+	}
+	sub, err := tree.Tree(filepath.ToSlash(filepath.Clean(dir)))
+	if errors.Is(err, object.ErrDirectoryNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, e := range sub.Entries {
+		if e.Mode.IsFile() {
+			out = append(out, e.Name)
+		}
+	}
+	return out, nil
+}
+
+// resolve finds the commit base names, trying origin's remote-tracking branch,
+// a local branch and a full reference name in that order, then a commit hash.
+func (r *Repo) resolve(base string) (plumbing.Hash, error) {
+	for _, name := range []string{"refs/remotes/origin/" + base, "refs/heads/" + base, base} {
+		ref, err := storer.ResolveReference(r.store, plumbing.ReferenceName(name))
+		if err == nil {
+			return ref.Hash(), nil
+		}
+	}
+	if plumbing.IsHash(base) {
+		return plumbing.NewHash(base), nil
+	}
+	return plumbing.ZeroHash, fmt.Errorf("no branch, reference or commit %s", base)
+}

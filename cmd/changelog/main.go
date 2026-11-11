@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -54,7 +55,8 @@ func main() {
 func inspect() {
 	var (
 		path       = flag.String("changelog", "CHANGELOG.md", "path to the changelog")
-		fragments  = flag.String("fragments", "", "directory of fragments to check; none when empty")
+		fragments  = flag.String("fragments", ".changelog", "directory of fragments to check; none when empty")
+		base       = flag.String("base", "", "branch a pull request merges into, which missing-fragment reads the merge base with; none outside a pull request")
 		sections   = flag.String("sections", "", "comma-separated level-3 headings to accept; the Keep a Changelog six when empty")
 		asError    = flag.String("error", "", "comma-separated checks to raise as errors")
 		asWarning  = flag.String("warn", "", "comma-separated checks to raise as warnings")
@@ -97,7 +99,15 @@ func inspect() {
 	if err != nil {
 		fail(err)
 	}
-	findings = append(findings, fragmentFindings...)
+	forecastFindings, err := forecast(*path, *fragments, opts, findings, time.Now().UTC().Format("2006-01-02"), os.Stderr, os.Stdout)
+	if err != nil {
+		fail(err)
+	}
+	missing, err := missingFragment(*path, *fragments, *base, opts, os.Stderr, os.Stdout)
+	if err != nil {
+		fail(err)
+	}
+	findings = slices.Concat(findings, fragmentFindings, forecastFindings, missing)
 	reason := notDue(doc, repo, *duePre)
 	if err := emit(outputs(doc, repo, findings, reason), os.Stdout); err != nil {
 		fail(err)
