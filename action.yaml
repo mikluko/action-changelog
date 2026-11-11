@@ -9,6 +9,12 @@ inputs:
     description: Path to the changelog, relative to the workspace.
     required: false
     default: CHANGELOG.md
+  fragments:
+    description: >-
+      Directory of fragments to check, relative to the workspace, as in
+      .changelog. Empty checks none.
+    required: false
+    default: ""
   sections:
     description: >-
       Comma-separated level-3 headings to accept. Empty accepts the Keep a
@@ -119,6 +125,7 @@ runs:
         # through ${{ }} expansion, so an input carrying a quote is one
         # argument rather than the end of one, and never a command.
         INPUT_CHANGELOG: ${{ inputs.changelog }}
+        INPUT_FRAGMENTS: ${{ inputs.fragments }}
         INPUT_SECTIONS: ${{ inputs.sections }}
         INPUT_ERROR: ${{ inputs.error }}
         INPUT_WARN: ${{ inputs.warn }}
@@ -131,6 +138,7 @@ runs:
       run: |
         exec "$BIN" \
           -changelog="$INPUT_CHANGELOG" \
+          -fragments="$INPUT_FRAGMENTS" \
           -sections="$INPUT_SECTIONS" \
           -error="$INPUT_ERROR" \
           -warn="$INPUT_WARN" \

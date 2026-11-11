@@ -43,7 +43,7 @@ jobs:
       # main is where it is refused.
       - name: Validate the changelog
         id: changelog
-        run: go run ./cmd/changelog -changelog CHANGELOG.md
+        run: go run ./cmd/changelog -changelog CHANGELOG.md -fragments .changelog
 
       # The values reach the script through the environment and never through
       # ${{ }} expansion: they come from a file the pull request author wrote.

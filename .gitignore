@@ -1,3 +1,8 @@
+.*
+!.gitignore
+!.gitattributes
+!.github
+!.forgejo
+!.changelog
 /dist/
 /changelog
-/.claude/

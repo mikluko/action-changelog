@@ -59,6 +59,7 @@ const (
 	CheckPrereleaseEntry   = "prerelease-entry"
 	CheckOCIIncompatible   = "oci-incompatible-version"
 	CheckUndatedEntry      = "undated-entry"
+	CheckFragmentForm      = "fragment-form"
 
 	// These five read the repository rather than the document alone.
 	CheckUndatedRelease          = "undated-release"
@@ -158,6 +159,11 @@ var Checks = []Check{
 	{
 		Name:        CheckUndatedEntry,
 		Description: "Policy: the newest entry states a date, where no final tag yet names its version. Switched off, that entry is open: a release still accumulating on a branch of its own, whether or not a candidate has been cut from it.",
+		Default:     Error,
+	},
+	{
+		Name:        CheckFragmentForm,
+		Description: "Each file in the fragments directory is a fragment: a Markdown file carrying level-3 section headings, each with a bullet list of notes, and nothing else. Silent where no fragments directory is given.",
 		Default:     Error,
 	},
 	{

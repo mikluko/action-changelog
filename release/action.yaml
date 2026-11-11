@@ -9,6 +9,13 @@ inputs:
     description: Path to the changelog, relative to the workspace.
     required: false
     default: CHANGELOG.md
+  fragments:
+    description: >-
+      Directory of fragments to fold into the Unreleased entry before
+      releasing it, relative to the workspace, as in .changelog. Each is
+      deleted once folded. Empty folds none.
+    required: false
+    default: ""
   version:
     description: >-
       The version to release, as in 1.2.3. Empty computes it from the newest
@@ -54,12 +61,14 @@ runs:
       env:
         BIN: ${{ steps.install.outputs.bin }}
         INPUT_CHANGELOG: ${{ inputs.changelog }}
+        INPUT_FRAGMENTS: ${{ inputs.fragments }}
         INPUT_VERSION: ${{ inputs.version }}
         INPUT_DATE: ${{ inputs.date }}
         INPUT_OPEN: ${{ inputs.open }}
       run: |
         exec "$BIN" release \
           -changelog="$INPUT_CHANGELOG" \
+          -fragments="$INPUT_FRAGMENTS" \
           -version="$INPUT_VERSION" \
           -date="$INPUT_DATE" \
           -open="$INPUT_OPEN"
