@@ -3,16 +3,18 @@ run-name: 🏗️ Candidate for ${{ github.base_ref }}
 
 # A candidate per revision of a pull request into a stabilization branch.
 #
-# paths is what makes the changelog decide: a pull request that touches no
-# changelog proposes no release, so nothing is cut and this never runs. The
-# filter is a three-dot diff over the whole pull request, so once a revision
-# names the release every later revision still matches and the ordinal advances.
+# paths is what makes the changelog decide: a pull request that touches neither
+# the changelog nor a fragment proposes nothing for the release, so nothing is
+# cut and this never runs. The filter is a three-dot diff over the whole pull
+# request, so once a revision proposes something every later revision still
+# matches and the ordinal advances.
 on:
   pull_request:
     branches:
       - 'release/*'
     paths:
       - CHANGELOG.md
+      - '.changelog/**'
 
 # Not canceled: a run may be part-way through pushing a tag.
 concurrency:
@@ -36,8 +38,6 @@ jobs:
         uses: mikluko/action-changelog/actions/validate@v2
         with:
           sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
-          # Notes are written into CHANGELOG.md, not into fragments.
-          fragments: ""
           error: prerelease-entry
           # The open entry is this branch's normal state.
           "off": undated-entry

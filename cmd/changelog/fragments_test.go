@@ -144,19 +144,23 @@ func TestLintFragmentsHonoursOff(t *testing.T) {
 }
 
 func TestForecast(t *testing.T) {
-	const clean = "# Changelog\n\n## [Unreleased]\n\n## [1.2.3] - 2020-01-01\n\n- x\n"
+	const (
+		clean = "# Changelog\n\n## [Unreleased]\n\n## [1.2.3] - 2020-01-01\n\n- x\n"
+		open  = "# Changelog\n\n## [Unreleased]\n\n## [1.3.0]\n\n- y\n\n## [1.2.3] - 2020-01-01\n\n- x\n"
+	)
 	for _, tc := range []struct {
 		name, changelog string
 		files           map[string]string
-		want            int
+		want, line      int
 	}{
-		{"releasable", clean, map[string]string{"a.md": "### Added\n\n- a\n"}, 0},
-		{"nothing to release", clean, nil, 0},
-		{"a section the release would carry unknown", clean, map[string]string{"a.md": "### Fixes\n\n- a\n"}, 1},
-		{"an open entry the release cannot pass", "# Changelog\n\n## [Unreleased]\n\n## [1.3.0]\n\n- y\n\n## [1.2.3] - 2020-01-01\n\n- x\n",
-			map[string]string{"a.md": "### Added\n\n- a\n"}, 1},
-		{"a defect the changelog already raises is not raised again", "# Changelog\n\n## [Unreleased]\n\n### Fixes\n\n- a\n\n## [1.2.3] - 2020-01-01\n\n- x\n", nil, 0},
-		{"malformed fragments are fragment-form's", clean, map[string]string{"a.md": "- a\n"}, 0},
+		{"releasable", clean, map[string]string{"a.md": "### Added\n\n- a\n"}, 0, 0},
+		{"nothing to release", clean, nil, 0, 0},
+		{"a section the release would carry unknown", clean, map[string]string{"a.md": "### Fixes\n\n- a\n"}, 1, 3},
+		{"fragments folded into the open entry", open, map[string]string{"a.md": "### Added\n\n- a\n"}, 0, 0},
+		{"an open entry is pending without fragments", open, nil, 0, 0},
+		{"an open entry that would close dated before the entry below", "# Changelog\n\n## [Unreleased]\n\n## [1.3.0]\n\n- y\n\n## [1.2.3] - 2020-03-01\n\n- x\n", nil, 1, 5},
+		{"a defect the changelog already raises is not raised again", "# Changelog\n\n## [Unreleased]\n\n### Fixes\n\n- a\n\n## [1.2.3] - 2020-01-01\n\n- x\n", nil, 0, 0},
+		{"malformed fragments are fragment-form's", clean, map[string]string{"a.md": "- a\n"}, 0, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path, dir := fragmentDir(t, tc.changelog, tc.files)
@@ -174,8 +178,8 @@ func TestForecast(t *testing.T) {
 				t.Errorf("%d findings, want %d; log:\n%s", len(got), tc.want, log.String())
 			}
 			for _, f := range got {
-				if f.Check != changelog.CheckFragmentsRelease || f.Line != 3 {
-					t.Errorf("finding %+v, want fragments-release at the [Unreleased] heading", f)
+				if f.Check != changelog.CheckFragmentsRelease || f.Line != tc.line {
+					t.Errorf("finding %+v, want fragments-release at line %d", f, tc.line)
 				}
 			}
 		})
@@ -240,5 +244,94 @@ func TestMissingFragment(t *testing.T) {
 				t.Errorf("%d findings, want %d; log:\n%s", len(got), tc.want, log.String())
 			}
 		})
+	}
+}
+
+// A pull request carries notes in a fragment or in the changelog itself, which
+// is what a release branch assembling its entry by hand or by fold does.
+func TestMissingFragmentCountsNotesInTheChangelog(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(t *testing.T, path, dir string)
+		want   int
+	}{
+		{"a note written into the changelog", func(t *testing.T, path, _ string) {
+			edit(t, path, "- f\n", "- f\n- a note\n")
+		}, 0},
+		{"the fragment folded into the changelog", func(t *testing.T, path, dir string) {
+			if err := foldCmd([]string{"-changelog", path, "-fragments", dir}, os.Stderr); err != nil {
+				t.Fatal(err)
+			}
+		}, 0},
+		{"a fragment deleted and nothing written", func(t *testing.T, _, dir string) {
+			if err := os.Remove(filepath.Join(dir, "old.md")); err != nil {
+				t.Fatal(err)
+			}
+		}, 1},
+		{"a note reworded reads as a new one", func(t *testing.T, path, _ string) {
+			edit(t, path, "- x\n", "- y\n")
+		}, 0},
+		{"a note removed", func(t *testing.T, path, _ string) {
+			edit(t, path, "\n- f\n", "\n")
+		}, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path, dir := branchWithFragments(t, nil)
+			tc.change(t, path, dir)
+			var log bytes.Buffer
+			got, err := missingFragment(path, dir, "main", changelog.Options{}, &log, &log)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != tc.want {
+				t.Errorf("%d findings, want %d; log:\n%s", len(got), tc.want, log.String())
+			}
+		})
+	}
+}
+
+func edit(t *testing.T, path, old, new string) {
+	t.Helper()
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), old) {
+		t.Fatalf("%s carries no %q", path, old)
+	}
+	if err := os.WriteFile(path, []byte(strings.Replace(string(src), old, new, 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFoldCmd(t *testing.T) {
+	for _, tc := range []struct{ name, changelog, want string }{
+		{"into the open entry", "# Changelog\n\n## [Unreleased]\n\n## [1.3.0]\n\n### Fixed\n\n- f\n\n## [1.2.3] - 2020-01-01\n\n- x\n",
+			"## [Unreleased]\n\n## [1.3.0]\n\n### Added\n\n- a\n\n### Fixed\n\n- f\n"},
+		{"into [Unreleased] where no entry is open", unreleased,
+			"## [Unreleased]\n\n### Added\n\n- a\n\n### Fixed\n\n- f\n\n## [1.2.3]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path, dir := fragmentDir(t, tc.changelog, map[string]string{"a.md": "### Added\n\n- a\n"})
+			if err := foldCmd([]string{"-changelog", path, "-fragments", dir}, os.Stderr); err != nil {
+				t.Fatal(err)
+			}
+			if got, _ := os.ReadFile(path); !strings.Contains(string(got), tc.want) {
+				t.Errorf("not folded:\n%s", got)
+			}
+			if left, _ := os.ReadDir(dir); len(left) != 0 {
+				t.Errorf("left in the directory: %v", left)
+			}
+		})
+	}
+}
+
+func TestFoldCmdWithNothingToFold(t *testing.T) {
+	path := write(t, unreleased)
+	if err := foldCmd([]string{"-changelog", path, "-fragments", filepath.Join(filepath.Dir(path), ".changelog")}, os.Stderr); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != unreleased {
+		t.Errorf("the file changed:\n%s", got)
 	}
 }

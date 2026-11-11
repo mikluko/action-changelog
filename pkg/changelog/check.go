@@ -170,7 +170,7 @@ var Checks = []Check{
 	},
 	{
 		Name:        CheckFragmentsRelease,
-		Description: "Folding the fragments into [Unreleased] and releasing it today, at the version its notes call for, gives a changelog that raises nothing the changelog as it stands does not. Silent where there is nothing to release, and where no fragments directory is given.",
+		Description: "Releasing what is pending today, with the fragments folded in, gives a changelog that raises nothing the changelog as it stands does not. What is pending is the open entry, closed with today's date, where there is one, and otherwise [Unreleased] at the version its notes call for. Silent where nothing is pending, and where no fragments directory is given.",
 		Default:     Error,
 	},
 	{
@@ -200,7 +200,7 @@ var Checks = []Check{
 	},
 	{
 		Name:        CheckMissingFragment,
-		Description: "A pull request adds a fragment: the fragments directory holds a file its merge base with the base branch does not. Silent where no base branch is given, which is outside a pull request, and where no fragments directory is.",
+		Description: "A pull request carries notes: a fragment its merge base with the base branch lacks, or a note the changelog there lacks, which is how a release branch assembling its entry carries them. Silent where no base branch is given, which is outside a pull request, and where no fragments directory is.",
 		Default:     Error,
 	},
 }

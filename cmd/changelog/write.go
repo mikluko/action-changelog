@@ -36,6 +36,49 @@ func appendCmd(args []string, stderr io.Writer) error {
 	})
 }
 
+// foldCmd folds the fragments into the open entry, or into [Unreleased] where
+// the newest versioned entry is not open, writes the document back, and
+// deletes the fragments.
+func foldCmd(args []string, stderr io.Writer) error {
+	fs := flag.NewFlagSet("fold", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	var (
+		path      = fs.String("changelog", "CHANGELOG.md", "path to the changelog")
+		fragments = fs.String("fragments", ".changelog", "directory of fragments to fold and delete")
+	)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() > 0 {
+		return fmt.Errorf("fold takes no arguments, got %q", fs.Args())
+	}
+	consumed, frags, err := readFragments(*fragments)
+	if err != nil || len(frags) == 0 {
+		return err
+	}
+	err = rewrite(*path, func(src []byte) ([]byte, error) {
+		if open, ok := changelog.Parse(src).Latest(); ok && open.Date == "" {
+			return changelog.FoldOpen(src, frags...)
+		}
+		return changelog.Fold(src, frags...)
+	})
+	if err != nil {
+		return err
+	}
+	return remove(*path, consumed)
+}
+
+// remove deletes the fragments at paths, which the changelog at path now
+// carries.
+func remove(path string, paths []string) error {
+	for _, p := range paths {
+		if err := os.Remove(p); err != nil {
+			return fmt.Errorf("%s carries the fragment and it is not deleted: %w", path, err)
+		}
+	}
+	return nil
+}
+
 // releaseCmd folds the fragments into the [Unreleased] entry, turns it into a
 // versioned one, writes the document back, deletes the fragments, and reports
 // the version and the notes it released.
@@ -83,10 +126,8 @@ func releaseCmd(args []string, stdout, stderr io.Writer, now func() time.Time) e
 	if err != nil {
 		return err
 	}
-	for _, p := range consumed {
-		if err := os.Remove(p); err != nil {
-			return fmt.Errorf("%s is released and the fragment is not deleted: %w", *path, err)
-		}
+	if err := remove(*path, consumed); err != nil {
+		return err
 	}
 
 	src, err := os.ReadFile(*path)

@@ -103,12 +103,13 @@ func severity(opts changelog.Options, check string) changelog.Severity {
 	return opts.Severities[check]
 }
 
-// forecast reports what releasing the changelog at path today, with the
-// fragments in dir folded in, would raise that current, the findings about it
-// as it stands, does not. Each is a fragments-release finding at the
-// [Unreleased] heading, where the release lands. An empty dir, nothing to
-// release, and fragments that do not parse, which fragment-form reports,
-// forecast nothing.
+// forecast reports what releasing the changelog at path today, as
+// ReleasePending does with the fragments in dir folded in, would raise that
+// current, the findings about it as it stands, does not. Each is a
+// fragments-release finding at the heading of the entry being released: the
+// open entry where there is one, and otherwise [Unreleased]. An empty dir,
+// nothing pending, and fragments that do not parse, which fragment-form
+// reports, forecast nothing.
 func forecast(path, dir string, opts changelog.Options, current []changelog.Finding, today string, log, annotations io.Writer) ([]changelog.Finding, error) {
 	sev := severity(opts, changelog.CheckFragmentsRelease)
 	if dir == "" || sev == changelog.Off {
@@ -122,14 +123,18 @@ func forecast(path, dir string, opts changelog.Options, current []changelog.Find
 	if err != nil {
 		return nil, err
 	}
-	line, notes := 1, ""
-	for _, e := range changelog.Parse(src).Entries {
+	doc := changelog.Parse(src)
+	line, pending := 1, len(frags) > 0
+	for _, e := range doc.Entries {
 		if e.Unreleased {
-			line, notes = e.Line, e.Body
+			line, pending = e.Line, pending || e.Body != ""
 			break
 		}
 	}
-	if len(frags) == 0 && notes == "" {
+	if open, ok := doc.Latest(); ok && open.Date == "" {
+		line, pending = open.Line, true
+	}
+	if !pending {
 		return nil, nil
 	}
 
@@ -137,9 +142,9 @@ func forecast(path, dir string, opts changelog.Options, current []changelog.Find
 		return changelog.Finding{Check: changelog.CheckFragmentsRelease, Severity: sev, Line: line, Msg: fmt.Sprintf(format, args...)}
 	}
 	var out []changelog.Finding
-	released, v, err := changelog.ReleaseFragments(src, frags, nil, today)
+	released, v, err := changelog.ReleasePending(src, frags, today)
 	if err != nil {
-		out = append(out, finding("releasing [Unreleased] with the fragments folded in fails: %v", err))
+		out = append(out, finding("releasing what is pending, with the fragments folded in, fails: %v", err))
 	} else {
 		type key struct{ check, msg string }
 		seen := make(map[key]bool, len(current))
@@ -148,7 +153,7 @@ func forecast(path, dir string, opts changelog.Options, current []changelog.Find
 		}
 		for _, f := range changelog.Parse(released).Lint(opts) {
 			if !seen[key{f.Check, f.Msg}] {
-				out = append(out, finding("releasing the fragments as %s raises %s: %s", v, f.Check, f.Msg))
+				out = append(out, finding("releasing %s with the fragments folded in raises %s: %s", v, f.Check, f.Msg))
 			}
 		}
 	}
@@ -157,9 +162,10 @@ func forecast(path, dir string, opts changelog.Options, current []changelog.Find
 }
 
 // missingFragment reports a missing-fragment finding against the changelog at
-// path where the fragments in dir include none that the merge base of HEAD and
-// base lacks. An empty base or dir reports nothing, and so does a check
-// switched off.
+// path where the pull request carries no notes: none of the fragments in dir is
+// missing from the merge base of HEAD and base, and the changelog carries no
+// note it lacked there. An empty base or dir reports nothing, and so does a
+// check switched off.
 func missingFragment(path, dir, base string, opts changelog.Options, log, annotations io.Writer) ([]changelog.Finding, error) {
 	sev := severity(opts, changelog.CheckMissingFragment)
 	if base == "" || dir == "" || sev == changelog.Off {
@@ -169,9 +175,9 @@ func missingFragment(path, dir, base string, opts changelog.Options, log, annota
 	if err != nil {
 		return nil, err
 	}
-	msg, err := addsNoFragment(path, dir, base, paths)
+	msg, err := carriesNoNotes(path, dir, base, paths)
 	if err != nil {
-		msg = fmt.Sprintf("cannot tell whether this pull request adds a fragment: %v; a checkout with fetch-depth: 0 carries %s", err, base)
+		msg = fmt.Sprintf("cannot tell whether this pull request carries notes: %v; a checkout with fetch-depth: 0 carries %s", err, base)
 	}
 	if msg == "" {
 		return nil, nil
@@ -181,18 +187,23 @@ func missingFragment(path, dir, base string, opts changelog.Options, log, annota
 	return out, nil
 }
 
-// addsNoFragment returns why the fragments at paths add nothing to the merge
-// base with base, or "" where one of them is new.
-func addsNoFragment(path, dir, base string, paths []string) (string, error) {
+// carriesNoNotes returns why the pull request carries no notes, or "" where a
+// fragment at paths or a note in the changelog at path is new since the merge
+// base with base.
+func carriesNoNotes(path, dir, base string, paths []string) (string, error) {
 	repo, err := git.Open(filepath.Dir(path))
 	if err != nil {
 		return "", err
 	}
-	rel, err := repoRelative(repo.Root(), dir)
+	snap, err := repo.MergeBase(base)
 	if err != nil {
 		return "", err
 	}
-	before, err := repo.FilesAtMergeBase(base, rel)
+	relDir, err := repoRelative(repo.Root(), dir)
+	if err != nil {
+		return "", err
+	}
+	before, err := snap.Files(relDir)
 	if err != nil {
 		return "", err
 	}
@@ -201,5 +212,31 @@ func addsNoFragment(path, dir, base string, paths []string) (string, error) {
 			return "", nil
 		}
 	}
-	return fmt.Sprintf("this pull request adds no fragment to %s; add a *.md file there carrying its notes", dir), nil
+
+	relPath, err := repoRelative(repo.Root(), path)
+	if err != nil {
+		return "", err
+	}
+	was, err := snap.File(relPath)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", err
+	}
+	now, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	known := make(map[string]bool)
+	for _, e := range changelog.Parse(was).Entries {
+		for _, n := range e.Notes() {
+			known[n] = true
+		}
+	}
+	for _, e := range changelog.Parse(now).Entries {
+		for _, n := range e.Notes() {
+			if !known[n] {
+				return "", nil
+			}
+		}
+	}
+	return fmt.Sprintf("this pull request carries no notes; add a *.md fragment to %s carrying them", dir), nil
 }

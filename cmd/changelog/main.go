@@ -30,11 +30,13 @@ func main() {
 		switch os.Args[1] {
 		case "append":
 			err = appendCmd(os.Args[2:], os.Stderr)
+		case "fold":
+			err = foldCmd(os.Args[2:], os.Stderr)
 		case "release":
 			err = releaseCmd(os.Args[2:], os.Stdout, os.Stderr, time.Now)
 		default:
 			if !strings.HasPrefix(os.Args[1], "-") {
-				fail(fmt.Errorf("%q is not a subcommand: append, release, or none to read the changelog", os.Args[1]))
+				fail(fmt.Errorf("%q is not a subcommand: append, fold, release, or none to read the changelog", os.Args[1]))
 			}
 			inspect()
 			return

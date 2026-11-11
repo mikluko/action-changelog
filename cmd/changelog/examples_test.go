@@ -183,28 +183,24 @@ func TestReleaseBranchWorkflowInputs(t *testing.T) {
 		want     map[string]string
 	}{
 		{branchCI, map[string]string{
-			"sections":  exampleSections,
-			"fragments": "",
-			"error":     changelog.CheckPrereleaseEntry,
-			"off":       changelog.CheckUndatedEntry,
+			"sections": exampleSections,
+			"error":    changelog.CheckPrereleaseEntry,
+			"off":      changelog.CheckUndatedEntry,
 		}},
 		{branchCandidate, map[string]string{
 			"sections":       exampleSections,
-			"fragments":      "",
 			"error":          changelog.CheckPrereleaseEntry,
 			"off":            changelog.CheckUndatedEntry,
 			"reference-tags": "final",
 		}},
 		{branchRelease, map[string]string{
-			"sections":  exampleSections,
-			"fragments": "",
-			"error":     changelog.CheckPrereleaseEntry,
+			"sections": exampleSections,
+			"error":    changelog.CheckPrereleaseEntry,
 		}},
 		{branchPublish, map[string]string{
-			"sections":  exampleSections,
-			"fragments": "",
-			"error":     changelog.CheckPrereleaseEntry,
-			"off":       changelog.CheckUndatedEntry,
+			"sections": exampleSections,
+			"error":    changelog.CheckPrereleaseEntry,
+			"off":      changelog.CheckUndatedEntry,
 		}},
 	} {
 		t.Run(filepath.Base(tc.workflow), func(t *testing.T) {

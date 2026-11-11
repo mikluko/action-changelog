@@ -466,43 +466,52 @@ func common(dot string) (string, error) {
 	return filepath.Clean(target), nil
 }
 
-// FilesAtMergeBase returns the names of the files directly in dir, a path
-// relative to Root, in the tree of the merge base of HEAD and base.
+// Snapshot is the tree of one commit, read by paths relative to Root.
+type Snapshot struct {
+	tree *object.Tree
+}
+
+// MergeBase returns the tree of the merge base of HEAD and base.
 //
 // Base is a branch as a pull request names its target, as in main, and is
 // looked up as origin's remote-tracking branch before a local one; a full
-// reference name or a commit hash is taken as it is. A dir the merge base does
-// not carry holds no files. A checkout too shallow to reach the merge base is
-// an error.
-func (r *Repo) FilesAtMergeBase(base, dir string) ([]string, error) {
+// reference name or a commit hash is taken as it is. A checkout too shallow to
+// reach the merge base is an error.
+func (r *Repo) MergeBase(base string) (Snapshot, error) {
 	head, err := storer.ResolveReference(r.store, plumbing.HEAD)
 	if err != nil {
-		return nil, fmt.Errorf("HEAD: %w", err)
+		return Snapshot{}, fmt.Errorf("HEAD: %w", err)
 	}
 	ours, err := object.GetCommit(r.store, head.Hash())
 	if err != nil {
-		return nil, fmt.Errorf("HEAD at %s: %w", head.Hash(), err)
+		return Snapshot{}, fmt.Errorf("HEAD at %s: %w", head.Hash(), err)
 	}
 	h, err := r.resolve(base)
 	if err != nil {
-		return nil, err
+		return Snapshot{}, err
 	}
 	theirs, err := object.GetCommit(r.store, h)
 	if err != nil {
-		return nil, fmt.Errorf("%s at %s: %w", base, h, err)
+		return Snapshot{}, fmt.Errorf("%s at %s: %w", base, h, err)
 	}
 	bases, err := ours.MergeBase(theirs)
 	if err != nil {
-		return nil, fmt.Errorf("the merge base of HEAD and %s: %w", base, err)
+		return Snapshot{}, fmt.Errorf("the merge base of HEAD and %s: %w", base, err)
 	}
 	if len(bases) == 0 {
-		return nil, fmt.Errorf("HEAD and %s share no history this checkout carries", base)
+		return Snapshot{}, fmt.Errorf("HEAD and %s share no history this checkout carries", base)
 	}
 	tree, err := bases[0].Tree()
 	if err != nil {
-		return nil, err
+		return Snapshot{}, err
 	}
-	sub, err := tree.Tree(filepath.ToSlash(filepath.Clean(dir)))
+	return Snapshot{tree: tree}, nil
+}
+
+// Files returns the names of the files directly in dir. A dir the snapshot
+// does not carry holds no files.
+func (s Snapshot) Files(dir string) ([]string, error) {
+	sub, err := s.tree.Tree(filepath.ToSlash(filepath.Clean(dir)))
 	if errors.Is(err, object.ErrDirectoryNotFound) {
 		return nil, nil
 	}
@@ -516,6 +525,20 @@ func (r *Repo) FilesAtMergeBase(base, dir string) ([]string, error) {
 		}
 	}
 	return out, nil
+}
+
+// File returns the contents of path, wrapping os.ErrNotExist where the
+// snapshot carries no such file.
+func (s Snapshot) File(path string) ([]byte, error) {
+	f, err := s.tree.File(filepath.ToSlash(filepath.Clean(path)))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, os.ErrNotExist)
+	}
+	c, err := f.Contents()
+	if err != nil {
+		return nil, err
+	}
+	return []byte(c), nil
 }
 
 // resolve finds the commit base names, trying origin's remote-tracking branch,

@@ -3,6 +3,7 @@ package changelog
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"sarak.sh/mikluko/changelog/pkg/semver"
@@ -134,5 +135,78 @@ func TestReleaseFragments(t *testing.T) {
 	}
 	if _, _, err := ReleaseFragments([]byte(src), nil, nil, "2020-02-02"); err == nil {
 		t.Error("no error with nothing to release")
+	}
+}
+
+func TestFoldOpen(t *testing.T) {
+	src := head + "## [Unreleased]\n\n## [1.1.0]\n\n### Fixed\n\n- f\n\n## [1.0.0] - 2020-01-01\n\n- x\n"
+	frag, err := ParseFragment([]byte("### Added\n\n- a\n\n### Fixed\n\n- g\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := FoldOpen([]byte(src), frag)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := head + "## [Unreleased]\n\n## [1.1.0]\n\n### Added\n\n- a\n\n### Fixed\n\n- f\n- g\n\n## [1.0.0] - 2020-01-01\n\n- x\n"
+	if string(got) != want {
+		t.Errorf("got:\n%s", got)
+	}
+
+	dated := head + "## [Unreleased]\n\n## [1.0.0] - 2020-01-01\n\n- x\n"
+	if _, err := FoldOpen([]byte(dated), frag); err == nil {
+		t.Error("no error folding into a dated entry")
+	}
+}
+
+func TestClose(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"bracketed", head + "## [1.1.0]\n\n- f\n", head + "## [1.1.0] - 2020-02-02\n\n- f\n"},
+		{"closing hashes", head + "## 1.1.0 ##\n\n- f\n", head + "## 1.1.0 - 2020-02-02\n\n- f\n"},
+		{"CRLF", "## [1.1.0]\r\n\r\n- f\r\n", "## [1.1.0] - 2020-02-02\r\n\r\n- f\r\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Close([]byte(tc.src), "2020-02-02")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+	if _, err := Close([]byte(head+"## [1.0.0] - 2020-01-01\n"), "2020-02-02"); err == nil {
+		t.Error("no error closing a dated entry")
+	}
+	if _, err := Close([]byte(head+"## [1.1.0]\n"), "Feb 2"); err == nil {
+		t.Error("no error for a date that is not YYYY-MM-DD")
+	}
+}
+
+func TestReleasePending(t *testing.T) {
+	frag, err := ParseFragment([]byte("### Added\n\n- a\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	open := head + "## [Unreleased]\n\n## [1.1.0]\n\n### Fixed\n\n- f\n\n## [1.0.0] - 2020-01-01\n\n- x\n"
+	got, v, err := ReleasePending([]byte(open), []Fragment{frag}, "2020-02-02")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.String() != "1.1.0" || !strings.Contains(string(got), "## [1.1.0] - 2020-02-02\n\n### Added\n\n- a\n\n### Fixed\n\n- f\n") {
+		t.Errorf("open entry: version %s,\n%s", v, got)
+	}
+
+	dated := head + "## [Unreleased]\n\n## [1.0.0] - 2020-01-01\n\n- x\n"
+	if _, v, err := ReleasePending([]byte(dated), []Fragment{frag}, "2020-02-02"); err != nil || v.String() != "1.1.0" {
+		t.Errorf("dated entry: %s, %v", v, err)
+	}
+}
+
+func TestEntryNotes(t *testing.T) {
+	doc := Parse([]byte(head + "## [1.1.0]\n\n### Added\n\n- a\n- b\n  continued\n\nprose\n\n### Fixed\n\n* f\n"))
+	got := doc.Entries[0].Notes()
+	if want := []string{"a", "b\ncontinued", "f"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }

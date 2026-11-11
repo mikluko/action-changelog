@@ -16,6 +16,7 @@ product.
 | Where a release is prepared | on the trunk | on a `release/*` branch |
 | The newest entry | names a version and a date | names a version and no date while the branch is open |
 | What a run hands downstream | the release, once the trunk finds the version untagged | a numbered candidate per pull-request revision, and the release on merge |
+| Where notes are written | into `CHANGELOG.md` | as fragments, folded into the open entry |
 | Workflow invocations | two | four, plus the suite |
 | `undated-entry` | at its default, `error` | at its default on the trunk alone, switched off on the other three |
 | `undated-release` | at its default, `error` | at its default, `error` |

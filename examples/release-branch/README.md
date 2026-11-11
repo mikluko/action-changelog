@@ -31,11 +31,28 @@ Read the last column and you have the strategy. [`suite.yaml`](workflows/suite.y
 is the fifth file and yields nothing: it is the tests, called by everything that
 must not cut past a broken tree.
 
-**The changelog decides whether a run happens at all.** The two cutting
-workflows carry `paths: [CHANGELOG.md]`, so a change that proposes no release
-starts nothing. On a pull request that filter is a three-dot diff over the whole
-request, so once a revision names the release, every later revision still matches
-and the ordinal advances.
+**The changelog decides whether a run happens at all.** `release.yaml` carries
+`paths: [CHANGELOG.md]` and `release-candidate.yaml` adds `.changelog/**`, so a
+change that proposes nothing for a release starts nothing. On a pull request that
+filter is a three-dot diff over the whole request, so once a revision proposes
+something, every later revision still matches and the ordinal advances.
+
+## Notes arrive as fragments
+
+A pull request into the branch carries its notes as a
+[fragment](../../README.md#fragments) in `.changelog/`, or as an edit to the
+open entry, and `missing-fragment` fails one carrying neither. Whoever prepares
+the release folds the fragments into the open entry, and edits it by hand where
+the notes want it:
+
+```
+go run sarak.sh/mikluko/changelog/cmd/changelog@latest fold
+```
+
+Every invocation forecasts the release with `fragments-release`: the open entry
+closed today, with the fragments not yet folded folded in, held to every check.
+The pull request merging the branch consumes fragments rather than adding them,
+and passes `missing-fragment` by the notes it writes into the changelog.
 
 ## Nothing is published from a push to the branch
 
@@ -109,7 +126,6 @@ One input, on one of the four.
 | | `ci` | `release-candidate` | `release` | `publish` |
 |---|---|---|---|---|
 | `sections` | the six plus `Breaking` | the six plus `Breaking` | the six plus `Breaking` | the six plus `Breaking` |
-| `fragments` | *(empty)* | *(empty)* | *(empty)* | *(empty)* |
 | `error` | `prerelease-entry` | `prerelease-entry` | `prerelease-entry` | `prerelease-entry` |
 | `off` | `undated-entry` | `undated-entry` | *(unset)* | `undated-entry` |
 | `reference-tags` | *(default)* | `final` | *(default)* | *(default)* |

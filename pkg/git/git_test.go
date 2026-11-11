@@ -539,7 +539,7 @@ func TestTagDayIsInTheTagsOwnZone(t *testing.T) {
 // The merge base, not the target's tip, is what a pull request's fragments are
 // read against: a fragment the target has since folded and deleted was still
 // there when the branch forked, so the branch did not add it.
-func TestFilesAtMergeBaseReadsTheForkPoint(t *testing.T) {
+func TestMergeBaseReadsTheForkPoint(t *testing.T) {
 	dir := repo(t)
 	if err := os.Mkdir(filepath.Join(dir, ".changelog"), 0o755); err != nil {
 		t.Fatal(err)
@@ -560,18 +560,27 @@ func TestFilesAtMergeBaseReadsTheForkPoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := r.FilesAtMergeBase("main", ".changelog")
+	snap, err := r.MergeBase("main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := snap.Files(".changelog")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if strings.Join(got, ",") != "old.md" {
 		t.Errorf("files at the merge base are %v, want [old.md]", got)
 	}
-
-	if got, err := r.FilesAtMergeBase("main", "absent"); err != nil || len(got) != 0 {
+	if got, err := snap.Files("absent"); err != nil || len(got) != 0 {
 		t.Errorf("an absent directory gives %v, %v", got, err)
 	}
-	if _, err := r.FilesAtMergeBase("nowhere", ".changelog"); err == nil {
+	if src, err := snap.File(".changelog/old.md"); err != nil || string(src) != "x\n" {
+		t.Errorf("old.md at the merge base reads %q, %v", src, err)
+	}
+	if _, err := snap.File(".changelog/new.md"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("new.md at the merge base: %v, want os.ErrNotExist", err)
+	}
+	if _, err := r.MergeBase("nowhere"); err == nil {
 		t.Error("no error for a base that names nothing")
 	}
 }

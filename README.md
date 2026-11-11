@@ -204,13 +204,13 @@ annotation, and which is what `error`, `warn` and `off` take.
 | `oci-incompatible-version` | `error` | A version can be an OCI tag. This is the one check whose subject is outside the document: build metadata is valid Semantic Versioning and the OCI tag grammar [a-zA-Z0-9_][a-zA-Z0-9._-]{0,127} has no +, so such a version cuts a git tag and is then not a name a registry takes. Switch it off where nothing is published. |
 | `undated-entry` | `error` | Policy: the newest entry states a date, where no final tag yet names its version. Switched off, that entry is open: a release still accumulating on a branch of its own, whether or not a candidate has been cut from it. |
 | `fragment-form` | `error` | Each file in the fragments directory is a fragment: a Markdown file carrying level-3 section headings, each with a bullet list of notes, and nothing else. Silent where no fragments directory is given. |
-| `fragments-release` | `error` | Folding the fragments into [Unreleased] and releasing it today, at the version its notes call for, gives a changelog that raises nothing the changelog as it stands does not. Silent where there is nothing to release, and where no fragments directory is given. |
+| `fragments-release` | `error` | Releasing what is pending today, with the fragments folded in, gives a changelog that raises nothing the changelog as it stands does not. What is pending is the open entry, closed with today's date, where there is one, and otherwise [Unreleased] at the version its notes call for. Silent where nothing is pending, and where no fragments directory is given. |
 | `undated-release` | `error` | The newest entry states a date, where a final tag already names its version. The release shipped and nobody dated it. A candidate tag is not one: it ships undated, which is what a stabilization branch is for. |
 | `no-git-tags` | `error` | The repository's tag history can be read, which every check comparing against it needs. |
 | `version-behind-tag` | `error` | The newest entry is not behind the reference tag. |
 | `release-entry-modified` | `error` | A released entry is unchanged since the reference tag. |
 | `prerelease-entry-modified` | `error` | A released pre-release entry is unchanged since the reference tag. |
-| `missing-fragment` | `error` | A pull request adds a fragment: the fragments directory holds a file its merge base with the base branch does not. Silent where no base branch is given, which is outside a pull request, and where no fragments directory is. |
+| `missing-fragment` | `error` | A pull request carries notes: a fragment its merge base with the base branch lacks, or a note the changelog there lacks, which is how a release branch assembling its entry carries them. Silent where no base branch is given, which is outside a pull request, and where no fragments directory is. |
 
 <!-- checks:end -->
 
@@ -436,8 +436,8 @@ into a file of its own, which nothing else touches, and the release stacks
 every fragment into the changelog.
 
 A fragment is a Markdown file in one directory, `.changelog/` unless the
-`fragments` input names another, carrying level-3 section headings and the notes listed under them, exactly as
-they would read under `[Unreleased]`:
+`fragments` input names another, carrying level-3 section headings and the
+notes listed under them, exactly as they would read under `[Unreleased]`:
 
 ```markdown
 ### Fixed
@@ -458,13 +458,18 @@ release fails the pull request adding it rather than the release:
 |---|---|
 | `fragment-form` | a file in the directory that is not a fragment, against that file |
 | `unknown-section` | a fragment's heading outside `sections`, against that file |
-| `fragments-release` | what releasing `[Unreleased]` today, fragments folded in, would raise that the changelog as it stands does not, against the `[Unreleased]` heading |
+| `fragments-release` | what releasing what is pending today, fragments folded in, would raise that the changelog as it stands does not, against the heading of the entry released |
 
-A fourth, `missing-fragment`, fails a pull request that adds no fragment: none
-of the fragments is missing from the merge base with the `base` branch. It is
-silent outside a pull request, and needs the base branch in the checkout, which
-`fetch-depth: 0` brings. A repository writing its notes into `CHANGELOG.md`
-rather than into fragments sets `fragments` empty, which silences all four:
+What is pending is the [open entry](#two-worked-policies), closed with today's
+date, where there is one, and otherwise `[Unreleased]` at the version its notes
+call for.
+
+A fourth, `missing-fragment`, fails a pull request that carries no notes: it
+adds no fragment missing from the merge base with the `base` branch, and the
+changelog carries no note it lacked there. It is silent outside a pull request,
+and needs the base branch in the checkout, which `fetch-depth: 0` brings. A
+repository writing its notes into `CHANGELOG.md` rather than into fragments sets
+`fragments` empty, which silences all four:
 
 ```yaml
 - uses: mikluko/action-changelog/actions/validate@v2
@@ -482,6 +487,43 @@ one note at a time, releases the result, and deletes the fragments it folded:
 One fragment it cannot read refuses the release with nothing written. A
 fragment carries notes and never a version: the version is computed from the
 folded notes and written into the changelog, and the tag still follows the file.
+
+#### On a release branch
+
+A release prepared on a branch of its own names its version in an open entry
+from the start, and its notes arrive as fragments, as edits to that entry, or
+both. The `fold` subcommand appends every fragment to the open entry, or to
+`[Unreleased]` where no entry is open, and deletes the fragments:
+
+```
+go run sarak.sh/mikluko/changelog/cmd/changelog@latest fold
+```
+
+The branch stays under all four checks. `fragments-release` forecasts the open
+entry closed today with the remaining fragments folded in, and the pull request
+merging the branch, which consumes fragments rather than adding them, passes
+`missing-fragment` by the notes it writes into the changelog.
+[`examples/release-branch/`](examples/release-branch/) is the strategy worked
+in full.
+
+## Migrating from 1.x
+
+| 1.x | 2.x |
+|---|---|
+| `mikluko/action-changelog@v1` | `mikluko/action-changelog/actions/validate@v2` |
+| `mikluko/action-changelog/append@v1` | `mikluko/action-changelog/actions/append@v2` |
+| `mikluko/action-changelog/release@v1` | `mikluko/action-changelog/actions/release@v2` |
+| `https://sarak.sh/mikluko/changelog@v1` | `https://sarak.sh/mikluko/changelog/actions/validate@v2` |
+
+The Forgejo paths of the writers move the same way. `@v1` keeps resolving to
+the 1.x paths.
+
+[Fragments](#fragments) are on by default: the reader and the release action
+read `.changelog/`, and on a pull request `missing-fragment` fails one carrying
+no notes. A repository that writes its notes into `CHANGELOG.md` keeps doing so
+with `fragments: ""` on each invocation. The checks added in 2.0.0, which
+`error`, `warn` and `off` now accept, are `fragment-form`, `fragments-release`
+and `missing-fragment`.
 
 ## Local use
 
@@ -512,6 +554,7 @@ The writers are subcommands, taking their inputs as flags of the same name:
 
 ```
 go run sarak.sh/mikluko/changelog/cmd/changelog@latest append -section Fixed -note "<note>"
+go run sarak.sh/mikluko/changelog/cmd/changelog@latest fold
 go run sarak.sh/mikluko/changelog/cmd/changelog@latest release
 go run sarak.sh/mikluko/changelog/cmd/changelog@latest release -fragments .changelog
 ```

@@ -175,25 +175,90 @@ func Append(src []byte, section, note string) ([]byte, error) {
 		return appendBlock(src, l, block), nil
 	}
 
-	e := l.entries[u]
+	return appendTo(src, l.entries[u], section, li), nil
+}
+
+// AppendOpen adds note under section of the open entry as Append does under
+// [Unreleased], and returns the edited document; src is not modified. It is an
+// error for the newest versioned entry not to be open.
+func AppendOpen(src []byte, section, note string) ([]byte, error) {
+	section = strings.TrimSpace(section)
+	if section == "" || strings.ContainsAny(section, "\r\n") {
+		return nil, fmt.Errorf("section %q is not a heading", section)
+	}
+	if strings.TrimSpace(note) == "" {
+		return nil, errors.New("the note is empty")
+	}
+	l := locate(src)
+	i, err := l.open()
+	if err != nil {
+		return nil, err
+	}
+	return appendTo(src, l.entries[i], section, item(note)), nil
+}
+
+// appendTo adds the list item li at the end of section under e, creating the
+// section in Keep a Changelog order where e has none, and leaves a section
+// already carrying li as it is.
+func appendTo(src []byte, e entrySpan, section, li string) []byte {
 	for _, s := range e.sections {
 		if strings.EqualFold(s.name, section) {
 			if has(src[s.headEnd:s.end], li) {
-				return slices.Clone(src), nil
+				return slices.Clone(src)
 			}
 			if s.end == s.headEnd {
-				return splice(src, s.headEnd, "\n\n"+li), nil
+				return splice(src, s.headEnd, "\n\n"+li)
 			}
-			return splice(src, s.end, "\n"+li), nil
+			return splice(src, s.end, "\n"+li)
 		}
 	}
 	want := rank(section)
 	for _, s := range e.sections {
 		if rank(s.name) > want {
-			return splice(src, s.head, "### "+section+"\n\n"+li+"\n\n"), nil
+			return splice(src, s.head, "### "+section+"\n\n"+li+"\n\n")
 		}
 	}
-	return splice(src, e.end, "\n\n### "+section+"\n\n"+li), nil
+	return splice(src, e.end, "\n\n### "+section+"\n\n"+li)
+}
+
+// open returns the index of the newest versioned entry, which is an error
+// unless it names a version and no date.
+func (l layout) open() (int, error) {
+	for i, e := range l.entries {
+		name, rest := splitHeading(e.raw)
+		if strings.EqualFold(name, "unreleased") {
+			continue
+		}
+		if _, err := semver.Parse(name); err != nil {
+			return -1, fmt.Errorf("the newest entry, %q, names no version", e.raw)
+		}
+		if rest != "" {
+			return -1, fmt.Errorf("the newest entry, %s, is dated rather than open", name)
+		}
+		return i, nil
+	}
+	return -1, errors.New("the changelog has no open entry")
+}
+
+// Close dates the open entry and returns the edited document; src is not
+// modified. It is an error for the newest versioned entry not to be open.
+func Close(src []byte, date string) ([]byte, error) {
+	if !isDate(date) {
+		return nil, fmt.Errorf("date %q is not YYYY-MM-DD", date)
+	}
+	l := locate(src)
+	i, err := l.open()
+	if err != nil {
+		return nil, err
+	}
+	e := l.entries[i]
+	line := string(src[e.head:e.headEnd])
+	cr := strings.HasSuffix(line, "\r")
+	line = strings.TrimRight(line, " \t#\r") + " - " + date
+	if cr {
+		line += "\r"
+	}
+	return replace(src, e.head, e.headEnd, line), nil
 }
 
 // has reports whether body carries item as whole lines.

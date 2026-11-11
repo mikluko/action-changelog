@@ -136,18 +136,52 @@ func LintFragment(src []byte, opts Options) []Finding {
 // entry, in order, exactly as Append would one at a time, and returns the
 // edited document; src is not modified.
 func Fold(src []byte, frags ...Fragment) ([]byte, error) {
+	return foldWith(Append, src, frags)
+}
+
+// FoldOpen appends every note of frags to the open entry as Fold does to
+// [Unreleased]. It is an error for the newest versioned entry not to be open.
+func FoldOpen(src []byte, frags ...Fragment) ([]byte, error) {
+	if _, err := locate(src).open(); err != nil {
+		return nil, err
+	}
+	return foldWith(AppendOpen, src, frags)
+}
+
+func foldWith(add func([]byte, string, string) ([]byte, error), src []byte, frags []Fragment) ([]byte, error) {
 	out := slices.Clone(src)
 	for _, frag := range frags {
 		for _, s := range frag.Sections {
 			for _, note := range s.Notes {
 				var err error
-				if out, err = Append(out, s.Name, note); err != nil {
+				if out, err = add(out, s.Name, note); err != nil {
 					return nil, err
 				}
 			}
 		}
 	}
 	return out, nil
+}
+
+// ReleasePending releases what the document has pending, dated date, with frags
+// folded in: the open entry where the newest versioned entry is one, closed as
+// Close does, and otherwise the [Unreleased] entry as ReleaseFragments does at
+// the version its notes call for. It returns the edited document and the
+// version released.
+func ReleasePending(src []byte, frags []Fragment, date string) ([]byte, semver.Version, error) {
+	open, ok := Parse(src).Latest()
+	if !ok || open.Date != "" {
+		return ReleaseFragments(src, frags, nil, date)
+	}
+	folded, err := FoldOpen(src, frags...)
+	if err != nil {
+		return nil, semver.Version{}, err
+	}
+	out, err := Close(folded, date)
+	if err != nil {
+		return nil, semver.Version{}, err
+	}
+	return out, open.Semver, nil
 }
 
 // itemText returns a list item's source without its marker, continuation lines
@@ -223,4 +257,23 @@ func ReleaseFragments(src []byte, frags []Fragment, version *semver.Version, dat
 		return nil, semver.Version{}, err
 	}
 	return out, v, nil
+}
+
+// Notes returns every list item of the entry's top-level lists, without its
+// marker, in document order, as a fragment's notes are read.
+func (e Entry) Notes() []string {
+	src := []byte(e.Body)
+	root := goldmark.New().Parser().Parse(text.NewReader(src))
+	var out []string
+	for n := root.FirstChild(); n != nil; n = n.NextSibling() {
+		if _, ok := n.(*ast.List); !ok {
+			continue
+		}
+		for li := n.FirstChild(); li != nil; li = li.NextSibling() {
+			if note, ok := itemText(src, li); ok {
+				out = append(out, note)
+			}
+		}
+	}
+	return out
 }
