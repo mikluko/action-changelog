@@ -10,7 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"sarak.sh/mikluko/changelog/pkg/changelog"
+	"sarak.sh/mikluko/changelog/v2/pkg/changelog"
 )
 
 // The examples under ./examples are executed rather than described. Each

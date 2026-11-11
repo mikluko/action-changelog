@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"sarak.sh/mikluko/changelog/internal/output"
-	"sarak.sh/mikluko/changelog/pkg/changelog"
-	"sarak.sh/mikluko/changelog/pkg/semver"
+	"sarak.sh/mikluko/changelog/v2/internal/output"
+	"sarak.sh/mikluko/changelog/v2/pkg/changelog"
+	"sarak.sh/mikluko/changelog/v2/pkg/semver"
 )
 
 // appendCmd adds one note under a section of the [Unreleased] entry and writes
@@ -36,6 +36,49 @@ func appendCmd(args []string, stderr io.Writer) error {
 	})
 }
 
+// foldCmd folds the fragments into the open entry, or into [Unreleased] where
+// the newest versioned entry is not open, writes the document back, and
+// deletes the fragments.
+func foldCmd(args []string, stderr io.Writer) error {
+	fs := flag.NewFlagSet("fold", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	var (
+		path      = fs.String("changelog", "CHANGELOG.md", "path to the changelog")
+		fragments = fs.String("fragments", ".changelog", "directory of fragments to fold and delete")
+	)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() > 0 {
+		return fmt.Errorf("fold takes no arguments, got %q", fs.Args())
+	}
+	consumed, frags, err := readFragments(*fragments)
+	if err != nil || len(frags) == 0 {
+		return err
+	}
+	err = rewrite(*path, func(src []byte) ([]byte, error) {
+		if open, ok := changelog.Parse(src).Latest(); ok && open.Date == "" {
+			return changelog.FoldOpen(src, frags...)
+		}
+		return changelog.Fold(src, frags...)
+	})
+	if err != nil {
+		return err
+	}
+	return remove(*path, consumed)
+}
+
+// remove deletes the fragments at paths, which the changelog at path now
+// carries.
+func remove(path string, paths []string) error {
+	for _, p := range paths {
+		if err := os.Remove(p); err != nil {
+			return fmt.Errorf("%s carries the fragment and it is not deleted: %w", path, err)
+		}
+	}
+	return nil
+}
+
 // releaseCmd folds the fragments into the [Unreleased] entry, turns it into a
 // versioned one, writes the document back, deletes the fragments, and reports
 // the version and the notes it released.
@@ -44,7 +87,7 @@ func releaseCmd(args []string, stdout, stderr io.Writer, now func() time.Time) e
 	fs.SetOutput(stderr)
 	var (
 		path      = fs.String("changelog", "CHANGELOG.md", "path to the changelog")
-		fragments = fs.String("fragments", "", "directory of fragments to fold into [Unreleased] and delete; none when empty")
+		fragments = fs.String("fragments", ".changelog", "directory of fragments to fold into [Unreleased] and delete; none when empty")
 		version   = fs.String("version", "", "version to release; computed from the notes when empty")
 		date      = fs.String("date", "", "release date as YYYY-MM-DD; today in UTC when empty")
 		open      = fs.Bool("open", false, "write an open entry, naming the version and no date")
@@ -66,30 +109,25 @@ func releaseCmd(args []string, stdout, stderr io.Writer, now func() time.Time) e
 		day = now().UTC().Format("2006-01-02")
 	}
 
+	given, err := releaseVersion(*version)
+	if err != nil {
+		return err
+	}
 	consumed, frags, err := readFragments(*fragments)
 	if err != nil {
 		return err
 	}
 	var released semver.Version
 	err = rewrite(*path, func(src []byte) ([]byte, error) {
-		src, err := changelog.Fold(src, frags...)
-		if err != nil {
-			return nil, err
-		}
-		v, err := releaseVersion(changelog.Parse(src), *version)
-		if err != nil {
-			return nil, err
-		}
+		out, v, err := changelog.ReleaseFragments(src, frags, given, day)
 		released = v
-		return changelog.Release(src, v, day)
+		return out, err
 	})
 	if err != nil {
 		return err
 	}
-	for _, p := range consumed {
-		if err := os.Remove(p); err != nil {
-			return fmt.Errorf("%s is released and the fragment is not deleted: %w", *path, err)
-		}
+	if err := remove(*path, consumed); err != nil {
+		return err
 	}
 
 	src, err := os.ReadFile(*path)
@@ -111,12 +149,16 @@ func releaseOutputs(v semver.Version, notes string) []output.Output {
 }
 
 // releaseVersion is the version given, read without the leading "v" a tag
-// carries, or the one doc's notes call for when none is.
-func releaseVersion(doc *changelog.Changelog, given string) (semver.Version, error) {
+// carries, or nil where none is, which leaves it to the notes.
+func releaseVersion(given string) (*semver.Version, error) {
 	if given = strings.TrimSpace(given); given == "" {
-		return doc.Next()
+		return nil, nil
 	}
-	return semver.Parse(strings.TrimPrefix(given, "v"))
+	v, err := semver.Parse(strings.TrimPrefix(given, "v"))
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
 }
 
 // rewrite applies edit to the file at path and writes the result back with the

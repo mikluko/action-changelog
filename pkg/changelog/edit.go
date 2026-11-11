@@ -10,7 +10,7 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
 
-	"sarak.sh/mikluko/changelog/pkg/semver"
+	"sarak.sh/mikluko/changelog/v2/pkg/semver"
 )
 
 // layout is where the parts of a document sit in its source, by byte offset.
@@ -46,58 +46,94 @@ type refSpan struct {
 
 func locate(src []byte) layout {
 	root := goldmark.New().Parser().Parse(text.NewReader(src))
-	var (
-		out     layout
-		entry   *entrySpan
-		section *sectionSpan
-	)
+	lc := locator{src: src, entry: -1, section: -1}
 	for n := root.FirstChild(); n != nil; n = n.NextSibling() {
-		if d, ok := n.(*ast.LinkReferenceDefinition); ok {
-			if s, e, ok := span(d); ok {
-				out.refs = append(out.refs, refSpan{
-					label: string(d.Label),
-					dest:  string(d.Destination),
-					start: lineStart(src, s),
-					end:   lineEnd(src, e),
-				})
-			}
-			continue
-		}
-		if h, ok := n.(*ast.Heading); ok && h.Level <= 2 {
-			section = nil
-			entry = nil
-			if h.Level == 2 {
-				if start := headingStart(src, h); start >= 0 {
-					end := lineEnd(src, start)
-					out.entries = append(out.entries, entrySpan{raw: headingText(src, h), head: start, headEnd: end, end: end})
-					entry = &out.entries[len(out.entries)-1]
-				}
-			}
-			continue
-		}
-		if entry == nil {
-			continue
-		}
-		if h, ok := n.(*ast.Heading); ok && h.Level == 3 {
-			if start := headingStart(src, h); start >= 0 {
-				end := lineEnd(src, start)
-				entry.sections = append(entry.sections, sectionSpan{name: headingText(src, h), head: start, headEnd: end, end: end})
-				section = &entry.sections[len(entry.sections)-1]
-				entry.end = end
-			}
-			continue
-		}
-		_, e, ok := span(n)
-		if !ok {
-			continue
-		}
-		e = lineEnd(src, e)
-		entry.end = max(entry.end, e)
-		if section != nil {
-			section.end = max(section.end, e)
-		}
+		lc.visit(n)
 	}
-	return out
+	return lc.out
+}
+
+// locator builds a layout one top-level node at a time; entry and section index
+// the ones open, or are -1.
+type locator struct {
+	src            []byte
+	out            layout
+	entry, section int
+}
+
+func (lc *locator) visit(n ast.Node) {
+	switch n := n.(type) {
+	case *ast.LinkReferenceDefinition:
+		lc.ref(n)
+	case *ast.Heading:
+		switch {
+		case n.Level <= 2:
+			lc.entryHeading(n)
+		case n.Level == 3:
+			lc.sectionHeading(n)
+		default:
+			lc.content(n)
+		}
+	default:
+		lc.content(n)
+	}
+}
+
+func (lc *locator) ref(d *ast.LinkReferenceDefinition) {
+	if s, e, ok := span(d); ok {
+		lc.out.refs = append(lc.out.refs, refSpan{
+			label: string(d.Label),
+			dest:  string(d.Destination),
+			start: lineStart(lc.src, s),
+			end:   lineEnd(lc.src, e),
+		})
+	}
+}
+
+// entryHeading closes the open entry; a level-2 heading opens the next, and a
+// level-1 heading leaves none open.
+func (lc *locator) entryHeading(h *ast.Heading) {
+	lc.entry, lc.section = -1, -1
+	if h.Level != 2 {
+		return
+	}
+	if start := headingStart(lc.src, h); start >= 0 {
+		end := lineEnd(lc.src, start)
+		lc.out.entries = append(lc.out.entries, entrySpan{raw: headingText(lc.src, h), head: start, headEnd: end, end: end})
+		lc.entry = len(lc.out.entries) - 1
+	}
+}
+
+func (lc *locator) sectionHeading(h *ast.Heading) {
+	if lc.entry < 0 {
+		return
+	}
+	start := headingStart(lc.src, h)
+	if start < 0 {
+		return
+	}
+	end := lineEnd(lc.src, start)
+	e := &lc.out.entries[lc.entry]
+	e.sections = append(e.sections, sectionSpan{name: headingText(lc.src, h), head: start, headEnd: end, end: end})
+	e.end = end
+	lc.section = len(e.sections) - 1
+}
+
+// content extends the open entry and section to the end of n.
+func (lc *locator) content(n ast.Node) {
+	if lc.entry < 0 {
+		return
+	}
+	_, end, ok := span(n)
+	if !ok {
+		return
+	}
+	end = lineEnd(lc.src, end)
+	e := &lc.out.entries[lc.entry]
+	e.end = max(e.end, end)
+	if lc.section >= 0 {
+		e.sections[lc.section].end = max(e.sections[lc.section].end, end)
+	}
 }
 
 // unreleased returns the index of the [Unreleased] entry, or -1.
@@ -175,25 +211,90 @@ func Append(src []byte, section, note string) ([]byte, error) {
 		return appendBlock(src, l, block), nil
 	}
 
-	e := l.entries[u]
+	return appendTo(src, l.entries[u], section, li), nil
+}
+
+// AppendOpen adds note under section of the open entry as Append does under
+// [Unreleased], and returns the edited document; src is not modified. It is an
+// error for the newest versioned entry not to be open.
+func AppendOpen(src []byte, section, note string) ([]byte, error) {
+	section = strings.TrimSpace(section)
+	if section == "" || strings.ContainsAny(section, "\r\n") {
+		return nil, fmt.Errorf("section %q is not a heading", section)
+	}
+	if strings.TrimSpace(note) == "" {
+		return nil, errors.New("the note is empty")
+	}
+	l := locate(src)
+	i, err := l.open()
+	if err != nil {
+		return nil, err
+	}
+	return appendTo(src, l.entries[i], section, item(note)), nil
+}
+
+// appendTo adds the list item li at the end of section under e, creating the
+// section in Keep a Changelog order where e has none, and leaves a section
+// already carrying li as it is.
+func appendTo(src []byte, e entrySpan, section, li string) []byte {
 	for _, s := range e.sections {
 		if strings.EqualFold(s.name, section) {
 			if has(src[s.headEnd:s.end], li) {
-				return slices.Clone(src), nil
+				return slices.Clone(src)
 			}
 			if s.end == s.headEnd {
-				return splice(src, s.headEnd, "\n\n"+li), nil
+				return splice(src, s.headEnd, "\n\n"+li)
 			}
-			return splice(src, s.end, "\n"+li), nil
+			return splice(src, s.end, "\n"+li)
 		}
 	}
 	want := rank(section)
 	for _, s := range e.sections {
 		if rank(s.name) > want {
-			return splice(src, s.head, "### "+section+"\n\n"+li+"\n\n"), nil
+			return splice(src, s.head, "### "+section+"\n\n"+li+"\n\n")
 		}
 	}
-	return splice(src, e.end, "\n\n### "+section+"\n\n"+li), nil
+	return splice(src, e.end, "\n\n### "+section+"\n\n"+li)
+}
+
+// open returns the index of the newest versioned entry, which is an error
+// unless it names a version and no date.
+func (l layout) open() (int, error) {
+	for i, e := range l.entries {
+		name, rest := splitHeading(e.raw)
+		if strings.EqualFold(name, "unreleased") {
+			continue
+		}
+		if _, err := semver.Parse(name); err != nil {
+			return -1, fmt.Errorf("the newest entry, %q, names no version", e.raw)
+		}
+		if rest != "" {
+			return -1, fmt.Errorf("the newest entry, %s, is dated rather than open", name)
+		}
+		return i, nil
+	}
+	return -1, errors.New("the changelog has no open entry")
+}
+
+// Close dates the open entry and returns the edited document; src is not
+// modified. It is an error for the newest versioned entry not to be open.
+func Close(src []byte, date string) ([]byte, error) {
+	if !isDate(date) {
+		return nil, fmt.Errorf("date %q is not YYYY-MM-DD", date)
+	}
+	l := locate(src)
+	i, err := l.open()
+	if err != nil {
+		return nil, err
+	}
+	e := l.entries[i]
+	line := string(src[e.head:e.headEnd])
+	cr := strings.HasSuffix(line, "\r")
+	line = strings.TrimRight(line, " \t#\r") + " - " + date
+	if cr {
+		line += "\r"
+	}
+	return replace(src, e.head, e.headEnd, line), nil
 }
 
 // has reports whether body carries item as whole lines.

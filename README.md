@@ -10,7 +10,7 @@ annotation, so a failing check lands on the offending line of the diff.
 - uses: actions/checkout@v5
   with:
     fetch-depth: 0
-- uses: mikluko/action-changelog@v1
+- uses: mikluko/action-changelog/actions/validate@v2
   with:
     changelog: CHANGELOG.md
 ```
@@ -21,13 +21,16 @@ default checkout is shallow and carries none, and `no-git-tags` fires.
 On Forgejo the same step names the action by its full URL:
 
 ```yaml
-- uses: https://sarak.sh/mikluko/changelog@v1
+- uses: https://sarak.sh/mikluko/changelog/actions/validate@v2
 ```
 
 The action is developed at
 [sarak.sh/mikluko/changelog](https://sarak.sh/mikluko/changelog),
 and [`mikluko/action-changelog`](https://github.com/mikluko/action-changelog) on
 GitHub is its mirror, carrying the same tags and releases.
+
+Each action lives in a directory of its own under `actions/`: `validate` reads
+the changelog, and [`append` and `release`](#writing-the-changelog) write it.
 
 A composite action that downloads a static binary from its release and runs it.
 It runs on Linux and macOS runners, X64 or ARM64, and needs bash, curl, and
@@ -61,7 +64,8 @@ Every input is optional.
 | Input | Default | Description |
 |---|---|---|
 | `changelog` | `CHANGELOG.md` | Path to the changelog, relative to the workspace. |
-| `fragments` | *(empty)* | Directory of [fragments](#fragments) to check, relative to the workspace. Empty checks none. |
+| `fragments` | `.changelog` | Directory of [fragments](#fragments) to check, relative to the workspace. Empty checks none. |
+| `base` | `${{ github.base_ref }}` | The branch a pull request merges into, which `missing-fragment` reads the merge base with. Empty outside a pull request. |
 | `sections` | *(empty)* | Comma-separated level-3 headings to accept. Empty accepts the Keep a Changelog six: Added, Changed, Deprecated, Removed, Fixed, Security. |
 | `error` | *(empty)* | Comma-separated checks to raise as errors. |
 | `warn` | *(empty)* | Comma-separated checks to raise as warnings. |
@@ -158,7 +162,7 @@ It says nothing about `valid`: under `fail-on: never` a workflow reads both.
 
 ```yaml
 - id: changelog
-  uses: mikluko/action-changelog@v1
+  uses: mikluko/action-changelog/actions/validate@v2
 - if: steps.changelog.outputs.due == 'true'
   env:
     VERSION: ${{ steps.changelog.outputs.version }}
@@ -200,11 +204,13 @@ annotation, and which is what `error`, `warn` and `off` take.
 | `oci-incompatible-version` | `error` | A version can be an OCI tag. This is the one check whose subject is outside the document: build metadata is valid Semantic Versioning and the OCI tag grammar [a-zA-Z0-9_][a-zA-Z0-9._-]{0,127} has no +, so such a version cuts a git tag and is then not a name a registry takes. Switch it off where nothing is published. |
 | `undated-entry` | `error` | Policy: the newest entry states a date, where no final tag yet names its version. Switched off, that entry is open: a release still accumulating on a branch of its own, whether or not a candidate has been cut from it. |
 | `fragment-form` | `error` | Each file in the fragments directory is a fragment: a Markdown file carrying level-3 section headings, each with a bullet list of notes, and nothing else. Silent where no fragments directory is given. |
+| `fragments-release` | `error` | Releasing what is pending today, with the fragments folded in, gives a changelog that raises nothing the changelog as it stands does not. What is pending is the open entry, closed with today's date, where there is one, and otherwise [Unreleased] at the version its notes call for. Silent where nothing is pending, and where no fragments directory is given. |
 | `undated-release` | `error` | The newest entry states a date, where a final tag already names its version. The release shipped and nobody dated it. A candidate tag is not one: it ships undated, which is what a stabilization branch is for. |
 | `no-git-tags` | `error` | The repository's tag history can be read, which every check comparing against it needs. |
 | `version-behind-tag` | `error` | The newest entry is not behind the reference tag. |
 | `release-entry-modified` | `error` | A released entry is unchanged since the reference tag. |
 | `prerelease-entry-modified` | `error` | A released pre-release entry is unchanged since the reference tag. |
+| `missing-fragment` | `error` | A pull request carries notes: a fragment its merge base with the base branch lacks, or a note the changelog there lacks, which is how a release branch assembling its entry carries them. Silent where no base branch is given, which is outside a pull request, and where no fragments directory is. |
 
 <!-- checks:end -->
 
@@ -364,7 +370,7 @@ workflow's to do. Every byte outside the lines they write is preserved.
 Adds a note under a section of the `[Unreleased]` entry:
 
 ```yaml
-- uses: mikluko/action-changelog/append@v1
+- uses: mikluko/action-changelog/actions/append@v2
   with:
     section: Fixed
     note: The parser no longer reads a fenced heading as an entry.
@@ -387,14 +393,14 @@ Turns the `[Unreleased]` entry into a versioned one and opens a new, empty
 `[Unreleased]` above it:
 
 ```yaml
-- uses: mikluko/action-changelog/release@v1
+- uses: mikluko/action-changelog/actions/release@v2
   id: release
 ```
 
 | Input | Default | Description |
 |---|---|---|
 | `changelog` | `CHANGELOG.md` | Path to the changelog, relative to the workspace. |
-| `fragments` | *(empty)* | Directory of [fragments](#fragments) to fold into `[Unreleased]` first and delete. Empty folds none. |
+| `fragments` | `.changelog` | Directory of [fragments](#fragments) to fold into `[Unreleased]` first and delete. Empty folds none. |
 | `version` | *(empty)* | The version to release. Empty computes it from the notes. |
 | `date` | *(empty)* | The release date as `YYYY-MM-DD`. Empty is today in UTC. |
 | `open` | `false` | `true` writes an [open entry](#two-worked-policies), naming the version and no date. |
@@ -429,9 +435,9 @@ another on the same lines. A fragment moves the note out of `CHANGELOG.md`
 into a file of its own, which nothing else touches, and the release stacks
 every fragment into the changelog.
 
-A fragment is a Markdown file in one directory, `.changelog/` by convention,
-carrying level-3 section headings and the notes listed under them, exactly as
-they would read under `[Unreleased]`:
+A fragment is a Markdown file in one directory, `.changelog/` unless the
+`fragments` input names another, carrying level-3 section headings and the
+notes listed under them, exactly as they would read under `[Unreleased]`:
 
 ```markdown
 ### Fixed
@@ -445,32 +451,81 @@ section, or a file in the directory not named `*.md`, is refused rather than
 dropped. Names starting with a dot are skipped, so a `.gitkeep` can hold the
 directory open.
 
-The reader checks them when given the directory, reporting each finding against
-the fragment's own file:
+The reader holds the fragments to three checks, so a fragment that would not
+release fails the pull request adding it rather than the release:
+
+| Check | Reports |
+|---|---|
+| `fragment-form` | a file in the directory that is not a fragment, against that file |
+| `unknown-section` | a fragment's heading outside `sections`, against that file |
+| `fragments-release` | what releasing what is pending today, fragments folded in, would raise that the changelog as it stands does not, against the heading of the entry released |
+
+What is pending is the [open entry](#two-worked-policies), closed with today's
+date, where there is one, and otherwise `[Unreleased]` at the version its notes
+call for.
+
+A fourth, `missing-fragment`, fails a pull request that carries no notes: it
+adds no fragment missing from the merge base with the `base` branch, and the
+changelog carries no note it lacked there. It is silent outside a pull request,
+and needs the base branch in the checkout, which `fetch-depth: 0` brings. A
+repository writing its notes into `CHANGELOG.md` rather than into fragments sets
+`fragments` empty, which silences all four:
 
 ```yaml
-- uses: mikluko/action-changelog@v1
+- uses: mikluko/action-changelog/actions/validate@v2
   with:
-    fragments: .changelog
+    fragments: ""
 ```
 
-`fragment-form` reports a file that is not a fragment, and `unknown-section`
-reports a heading outside `sections`, so a fragment that would not fold fails
-the pull request adding it rather than the release.
-
-The release action, given the same directory, folds every fragment into
-`[Unreleased]` as `append` would one note at a time, releases the result, and
-deletes the fragments it folded:
+The release action folds every fragment into `[Unreleased]` as `append` would
+one note at a time, releases the result, and deletes the fragments it folded:
 
 ```yaml
-- uses: mikluko/action-changelog/release@v1
-  with:
-    fragments: .changelog
+- uses: mikluko/action-changelog/actions/release@v2
 ```
 
 One fragment it cannot read refuses the release with nothing written. A
 fragment carries notes and never a version: the version is computed from the
 folded notes and written into the changelog, and the tag still follows the file.
+
+#### On a release branch
+
+A release prepared on a branch of its own names its version in an open entry
+from the start, and its notes arrive as fragments, as edits to that entry, or
+both. The `fold` subcommand appends every fragment to the open entry, or to
+`[Unreleased]` where no entry is open, and deletes the fragments:
+
+```
+go run sarak.sh/mikluko/changelog/v2/cmd/changelog@latest fold
+```
+
+The branch stays under all four checks. `fragments-release` forecasts the open
+entry closed today with the remaining fragments folded in, and the pull request
+merging the branch, which consumes fragments rather than adding them, passes
+`missing-fragment` by the notes it writes into the changelog.
+[`examples/release-branch/`](examples/release-branch/) is the strategy worked
+in full.
+
+## Migrating from 1.x
+
+| 1.x | 2.x |
+|---|---|
+| `mikluko/action-changelog@v1` | `mikluko/action-changelog/actions/validate@v2` |
+| `mikluko/action-changelog/append@v1` | `mikluko/action-changelog/actions/append@v2` |
+| `mikluko/action-changelog/release@v1` | `mikluko/action-changelog/actions/release@v2` |
+| `https://sarak.sh/mikluko/changelog@v1` | `https://sarak.sh/mikluko/changelog/actions/validate@v2` |
+| `sarak.sh/mikluko/changelog` | `sarak.sh/mikluko/changelog/v2` |
+
+The Forgejo paths of the writers move the same way. `@v1` keeps resolving to
+the 1.x paths. The Go module carries the `/v2` suffix a major version above 1
+requires.
+
+[Fragments](#fragments) are on by default: the reader and the release action
+read `.changelog/`, and on a pull request `missing-fragment` fails one carrying
+no notes. A repository that writes its notes into `CHANGELOG.md` keeps doing so
+with `fragments: ""` on each invocation. The checks added in 2.0.0, which
+`error`, `warn` and `off` now accept, are `fragment-form`, `fragments-release`
+and `missing-fragment`.
 
 ## Local use
 
@@ -479,7 +534,7 @@ The action is a Go command, and every input is a flag of the same name.
 To validate `CHANGELOG.md` in the current directory:
 
 ```
-go run sarak.sh/mikluko/changelog/cmd/changelog@latest
+go run sarak.sh/mikluko/changelog/v2/cmd/changelog@latest
 ```
 
 Findings go to stderr and the [outputs](#outputs) to stdout. The exit status is
@@ -488,52 +543,53 @@ Findings go to stderr and the [outputs](#outputs) to stdout. The exit status is
 To validate a changelog elsewhere, where `<path>` is its path:
 
 ```
-go run sarak.sh/mikluko/changelog/cmd/changelog@latest -changelog <path>
+go run sarak.sh/mikluko/changelog/v2/cmd/changelog@latest -changelog <path>
 ```
 
 To print the checks and their default severities:
 
 ```
-go run sarak.sh/mikluko/changelog/cmd/changelog@latest -list-checks
+go run sarak.sh/mikluko/changelog/v2/cmd/changelog@latest -list-checks
 ```
 
 The writers are subcommands, taking their inputs as flags of the same name:
 
 ```
-go run sarak.sh/mikluko/changelog/cmd/changelog@latest append -section Fixed -note "<note>"
-go run sarak.sh/mikluko/changelog/cmd/changelog@latest release
-go run sarak.sh/mikluko/changelog/cmd/changelog@latest release -fragments .changelog
+go run sarak.sh/mikluko/changelog/v2/cmd/changelog@latest append -section Fixed -note "<note>"
+go run sarak.sh/mikluko/changelog/v2/cmd/changelog@latest fold
+go run sarak.sh/mikluko/changelog/v2/cmd/changelog@latest release
+go run sarak.sh/mikluko/changelog/v2/cmd/changelog@latest release -fragments .changelog
 ```
 
 The Go packages the command is built on are importable:
-`sarak.sh/mikluko/changelog/pkg/changelog` parses, checks and edits a
-document, and `sarak.sh/mikluko/changelog/pkg/semver` and
-`sarak.sh/mikluko/changelog/pkg/git` read versions and a repository's tags.
+`sarak.sh/mikluko/changelog/v2/pkg/changelog` parses, checks and edits a
+document, and `sarak.sh/mikluko/changelog/v2/pkg/semver` and
+`sarak.sh/mikluko/changelog/v2/pkg/git` read versions and a repository's tags.
 
 ## Releasing
 
 This repository releases itself with its own action, which is the shortest
 statement of what the action is for.
 
-`action.yaml` names the release whose binary it downloads, so that reference has
-to be immutable and correct at the moment it is committed: a workflow pinning
-this action by SHA reads the file as it stands at that commit, and nothing is
-rewritten onto `main` afterwards. A release is therefore written in the pull
-request, in two places a test holds together:
+`actions/VERSION` names the release whose binary every action downloads, so that
+reference has to be immutable and correct at the moment it is committed: a
+workflow pinning an action by SHA reads the file as it stands at that commit,
+and nothing is rewritten onto `main` afterwards. A release is therefore one
+commit carrying two things a test holds together: `CHANGELOG.md` naming the
+version in its newest entry, and `actions/VERSION` naming the same one.
 
-1. `CHANGELOG.md` gains `## [1.2.3] - YYYY-MM-DD` above the previous entry.
-   `go run ./cmd/changelog release -fragments .changelog` writes it, folding the
-   fragments pull requests have left in `.changelog/` and deleting them.
-2. `action.yaml`, `append/action.yaml` and `release/action.yaml` set
-   `VERSION: 1.2.3` on their `install` step.
+Every pull request adds a [fragment](#fragments), and the release workflow on
+Forgejo, dispatched by hand from `main`, writes that commit: it folds the
+fragments into `CHANGELOG.md` at the version their notes call for, or at the
+one the dispatch names, writes `actions/VERSION`, validates the changelog, runs
+`go test ./...` and builds the binaries for Linux and macOS on amd64 and arm64.
+Only then does it push the commit to `main`, cut the tag, create the release
+from the entry's notes with the binaries and their `checksums.txt` attached,
+run the actions from that release, and move the major tag. Nothing else cuts a
+tag here, and a tag pushed by hand is not a path.
 
-`go test ./...` fails while those disagree. Merging is the whole of it. The
-release workflow on Forgejo runs the action against this repository's own
-changelog, and where it reports a version no tag carries, builds the binaries
-for Linux and macOS on amd64 and arm64, cuts the tag, creates the release from
-`notes` with the binaries and their `checksums.txt` attached, runs the action
-from that release, and moves the major tag for a final version. Nothing else
-cuts a tag here, and a tag pushed by hand is not a path.
+A run that fails after pushing the commit leaves `main` naming a version no tag
+carries, and dispatching again resumes at the tag rather than folding anew.
 
 The tag reaches GitHub through the mirror, and a workflow there copies the
 Forgejo release's notes and assets onto a GitHub release of the same tag.
@@ -547,7 +603,7 @@ Contributions are welcome. This is maintained in spare time and there is no
 commitment to review a pull request promptly, so an issue first is usually the
 cheaper way to find out whether a change is wanted.
 
-A change worth a changelog note carries it as a [fragment](#fragments) in
+Every pull request carries its notes as a [fragment](#fragments) in
 `.changelog/`, never as an edit to `CHANGELOG.md`, which only a release writes.
 
 AI-assisted contributions are welcome too, and are asked to be attributed: name

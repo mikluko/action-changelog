@@ -23,7 +23,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/go-git/go-git/v5/storage/filesystem"
-	"sarak.sh/mikluko/changelog/pkg/semver"
+	"sarak.sh/mikluko/changelog/v2/pkg/semver"
 )
 
 // Tag is a tag reference and the object it names, which is a commit for a
@@ -277,19 +277,7 @@ func (r *Repo) Reference(tags []Tag, admit Eligible) (Tag, bool, error) {
 		return Tag{}, false, nil
 	}
 
-	// Resolving each candidate up front makes the walk below one map lookup per
-	// commit rather than one ancestry query per tag. Where two tags name the
-	// same commit the higher version wins, candidates being highest first.
-	rank := make(map[plumbing.Hash]int, len(candidates))
-	for i, t := range candidates {
-		commit, err := r.commit(t.Hash)
-		if err != nil {
-			continue
-		}
-		if _, ok := rank[commit.Hash]; !ok {
-			rank[commit.Hash] = i
-		}
-	}
+	rank := r.rank(candidates)
 
 	head, err := storer.ResolveReference(r.store, plumbing.HEAD)
 	if err != nil {
@@ -302,12 +290,42 @@ func (r *Repo) Reference(tags []Tag, admit Eligible) (Tag, bool, error) {
 		return Tag{}, false, fmt.Errorf("HEAD at %s: %w", head.Hash(), err)
 	}
 
-	// The walk stops the moment the highest candidate is reached, so a checkout
-	// standing at or just past its newest tag pays for the commits in between
-	// and no more. Nothing else can improve on rank 0.
-	best := len(candidates)
+	best := r.best(head.Hash(), rank, len(candidates))
+	if best == len(candidates) {
+		return Tag{}, false, nil
+	}
+	return candidates[best], true, nil
+}
+
+// rank maps the commit each candidate names to its index, candidates being
+// highest first, so where two tags name one commit the higher version wins. A
+// candidate whose commit cannot be read is left out.
+//
+// Resolving each candidate up front makes the walk one map lookup per commit
+// rather than one ancestry query per tag.
+func (r *Repo) rank(candidates []Tag) map[plumbing.Hash]int {
+	rank := make(map[plumbing.Hash]int, len(candidates))
+	for i, t := range candidates {
+		commit, err := r.commit(t.Hash)
+		if err != nil {
+			continue
+		}
+		if _, ok := rank[commit.Hash]; !ok {
+			rank[commit.Hash] = i
+		}
+	}
+	return rank
+}
+
+// best returns the lowest rank of any commit reachable from head, or none
+// where no ranked commit is reachable.
+//
+// The walk stops the moment rank 0 is reached, so a checkout standing at or
+// just past its newest tag pays for the commits in between and no more.
+func (r *Repo) best(head plumbing.Hash, rank map[plumbing.Hash]int, none int) int {
+	best := none
 	seen := make(map[plumbing.Hash]bool)
-	queue := []plumbing.Hash{head.Hash()}
+	queue := []plumbing.Hash{head}
 	for len(queue) > 0 && best != 0 {
 		h := queue[0]
 		queue = queue[1:]
@@ -326,10 +344,7 @@ func (r *Repo) Reference(tags []Tag, admit Eligible) (Tag, bool, error) {
 		}
 		queue = append(queue, commit.ParentHashes...)
 	}
-	if best == len(candidates) {
-		return Tag{}, false, nil
-	}
-	return candidates[best], true, nil
+	return best
 }
 
 // final drops the tags naming a pre-release version, which is what costs a
@@ -379,22 +394,9 @@ func discover(dir string) (root, dot string, err error) {
 	}
 	for {
 		candidate := filepath.Join(abs, ".git")
-		info, err := os.Stat(candidate)
-		if err == nil {
-			if !info.IsDir() {
-				named := candidate
-				if candidate, err = gitdir(named); err != nil {
-					return "", "", err
-				}
-				if err := readable(candidate, named); err != nil {
-					return "", "", err
-				}
-			}
-			dot, err := common(candidate)
+		if info, err := os.Stat(candidate); err == nil {
+			dot, err := store(candidate, info.IsDir())
 			if err != nil {
-				return "", "", err
-			}
-			if err := readable(dot, candidate); err != nil {
 				return "", "", err
 			}
 			return abs, dot, nil
@@ -405,6 +407,29 @@ func discover(dir string) (root, dot string, err error) {
 		}
 		abs = parent
 	}
+}
+
+// store returns the directory holding the tags and objects of the repository
+// whose .git is at candidate: a directory, or a file naming one.
+func store(candidate string, isDir bool) (string, error) {
+	if !isDir {
+		named := candidate
+		var err error
+		if candidate, err = gitdir(named); err != nil {
+			return "", err
+		}
+		if err := readable(candidate, named); err != nil {
+			return "", err
+		}
+	}
+	dot, err := common(candidate)
+	if err != nil {
+		return "", err
+	}
+	if err := readable(dot, candidate); err != nil {
+		return "", err
+	}
+	return dot, nil
 }
 
 // readable reports that dir, which named it, is not a directory this process
@@ -464,4 +489,94 @@ func common(dot string) (string, error) {
 		target = filepath.Join(dot, target)
 	}
 	return filepath.Clean(target), nil
+}
+
+// Snapshot is the tree of one commit, read by paths relative to Root.
+type Snapshot struct {
+	tree *object.Tree
+}
+
+// MergeBase returns the tree of the merge base of HEAD and base.
+//
+// Base is a branch as a pull request names its target, as in main, and is
+// looked up as origin's remote-tracking branch before a local one; a full
+// reference name or a commit hash is taken as it is. A checkout too shallow to
+// reach the merge base is an error.
+func (r *Repo) MergeBase(base string) (Snapshot, error) {
+	head, err := storer.ResolveReference(r.store, plumbing.HEAD)
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("HEAD: %w", err)
+	}
+	ours, err := object.GetCommit(r.store, head.Hash())
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("HEAD at %s: %w", head.Hash(), err)
+	}
+	h, err := r.resolve(base)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	theirs, err := object.GetCommit(r.store, h)
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("%s at %s: %w", base, h, err)
+	}
+	bases, err := ours.MergeBase(theirs)
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("the merge base of HEAD and %s: %w", base, err)
+	}
+	if len(bases) == 0 {
+		return Snapshot{}, fmt.Errorf("HEAD and %s share no history this checkout carries", base)
+	}
+	tree, err := bases[0].Tree()
+	if err != nil {
+		return Snapshot{}, err
+	}
+	return Snapshot{tree: tree}, nil
+}
+
+// Files returns the names of the files directly in dir. A dir the snapshot
+// does not carry holds no files.
+func (s Snapshot) Files(dir string) ([]string, error) {
+	sub, err := s.tree.Tree(filepath.ToSlash(filepath.Clean(dir)))
+	if errors.Is(err, object.ErrDirectoryNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, e := range sub.Entries {
+		if e.Mode.IsFile() {
+			out = append(out, e.Name)
+		}
+	}
+	return out, nil
+}
+
+// File returns the contents of path, wrapping os.ErrNotExist where the
+// snapshot carries no such file.
+func (s Snapshot) File(path string) ([]byte, error) {
+	f, err := s.tree.File(filepath.ToSlash(filepath.Clean(path)))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, os.ErrNotExist)
+	}
+	c, err := f.Contents()
+	if err != nil {
+		return nil, err
+	}
+	return []byte(c), nil
+}
+
+// resolve finds the commit base names, trying origin's remote-tracking branch,
+// a local branch and a full reference name in that order, then a commit hash.
+func (r *Repo) resolve(base string) (plumbing.Hash, error) {
+	for _, name := range []string{"refs/remotes/origin/" + base, "refs/heads/" + base, base} {
+		ref, err := storer.ResolveReference(r.store, plumbing.ReferenceName(name))
+		if err == nil {
+			return ref.Hash(), nil
+		}
+	}
+	if plumbing.IsHash(base) {
+		return plumbing.NewHash(base), nil
+	}
+	return plumbing.ZeroHash, fmt.Errorf("no branch, reference or commit %s", base)
 }

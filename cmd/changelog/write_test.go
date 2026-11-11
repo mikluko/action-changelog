@@ -42,7 +42,7 @@ func TestAppendCmdWritesTheFile(t *testing.T) {
 func TestReleaseCmdComputesTheVersion(t *testing.T) {
 	path := write(t, unreleased)
 	var out bytes.Buffer
-	if err := releaseCmd([]string{"-changelog", path}, &out, os.Stderr, fixed(t)); err != nil {
+	if err := releaseCmd([]string{"-fragments", "", "-changelog", path}, &out, os.Stderr, fixed(t)); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(path)
@@ -59,7 +59,7 @@ func TestReleaseCmdComputesTheVersion(t *testing.T) {
 func TestReleaseCmdGivenVersionAndOpen(t *testing.T) {
 	path := write(t, unreleased)
 	var out bytes.Buffer
-	if err := releaseCmd([]string{"-changelog", path, "-version", "v2.0.0-rc.1", "-open"}, &out, os.Stderr, fixed(t)); err != nil {
+	if err := releaseCmd([]string{"-fragments", "", "-changelog", path, "-version", "v2.0.0-rc.1", "-open"}, &out, os.Stderr, fixed(t)); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(path)
@@ -73,7 +73,7 @@ func TestReleaseCmdGivenVersionAndOpen(t *testing.T) {
 
 func TestReleaseCmdRefusesOpenWithDate(t *testing.T) {
 	path := write(t, unreleased)
-	if err := releaseCmd([]string{"-changelog", path, "-open", "-date", "2020-02-02"}, os.Stdout, os.Stderr, fixed(t)); err == nil {
+	if err := releaseCmd([]string{"-fragments", "", "-changelog", path, "-open", "-date", "2020-02-02"}, os.Stdout, os.Stderr, fixed(t)); err == nil {
 		t.Error("no error")
 	}
 	if got, _ := os.ReadFile(path); string(got) != unreleased {
@@ -83,7 +83,7 @@ func TestReleaseCmdRefusesOpenWithDate(t *testing.T) {
 
 func TestReleaseCmdLeavesTheFileOnError(t *testing.T) {
 	path := write(t, unreleased)
-	if err := releaseCmd([]string{"-changelog", path, "-version", "1.0.0"}, os.Stdout, os.Stderr, fixed(t)); err == nil {
+	if err := releaseCmd([]string{"-fragments", "", "-changelog", path, "-version", "1.0.0"}, os.Stdout, os.Stderr, fixed(t)); err == nil {
 		t.Error("no error for a version below the newest")
 	}
 	if got, _ := os.ReadFile(path); string(got) != unreleased {

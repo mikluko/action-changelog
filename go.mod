@@ -1,4 +1,4 @@
-module sarak.sh/mikluko/changelog
+module sarak.sh/mikluko/changelog/v2
 
 go 1.27.0
 

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"sarak.sh/mikluko/changelog/pkg/semver"
+	"sarak.sh/mikluko/changelog/v2/pkg/semver"
 )
 
 func TestParseHeadingForms(t *testing.T) {
@@ -49,21 +49,27 @@ func TestParseHeadingForms(t *testing.T) {
 			if tc.version != "" && e.Semver.Tag() != tc.version {
 				t.Errorf("parseHeading(%q).Semver = %q, want %q", tc.in, e.Semver.Tag(), tc.version)
 			}
-			err := e.VersionErr
-			if tc.rule == "" {
-				if err != nil {
-					t.Errorf("parseHeading(%q) = %v, want no error", tc.in, err)
-				}
-				return
-			}
-			var se *semver.SyntaxError
-			if !errors.As(err, &se) {
-				t.Fatalf("parseHeading(%q) = %v, want a *semver.SyntaxError", tc.in, err)
-			}
-			if se.Rule != tc.rule {
-				t.Errorf("parseHeading(%q) broke %s, want %s", tc.in, se.Rule, tc.rule)
-			}
+			checkRule(t, tc.in, e.VersionErr, tc.rule)
 		})
+	}
+}
+
+// checkRule holds err, from parsing the heading in, to breaking rule, or to
+// nil where rule is empty.
+func checkRule(t *testing.T, in string, err error, rule semver.Rule) {
+	t.Helper()
+	if rule == "" {
+		if err != nil {
+			t.Errorf("parseHeading(%q) = %v, want no error", in, err)
+		}
+		return
+	}
+	var se *semver.SyntaxError
+	if !errors.As(err, &se) {
+		t.Fatalf("parseHeading(%q) = %v, want a *semver.SyntaxError", in, err)
+	}
+	if se.Rule != rule {
+		t.Errorf("parseHeading(%q) broke %s, want %s", in, se.Rule, rule)
 	}
 }
 

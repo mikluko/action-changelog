@@ -9,6 +9,8 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
+
+	"sarak.sh/mikluko/changelog/v2/pkg/semver"
 )
 
 // Fragment is a file of notes waiting to be folded into the [Unreleased] entry:
@@ -43,60 +45,78 @@ func (e *FragmentError) Error() string { return fmt.Sprintf("line %d: %s", e.Lin
 // drop it or move it under a section it was not written for.
 func ParseFragment(src []byte) (Fragment, error) {
 	root := goldmark.New().Parser().Parse(text.NewReader(src))
-	var (
-		out     Fragment
-		section *FragmentSection
-	)
-	closeSection := func() error {
-		if section != nil && len(section.Notes) == 0 {
-			return &FragmentError{Line: section.Line, Msg: fmt.Sprintf("section %q lists no notes", section.Name)}
-		}
-		return nil
-	}
+	var out Fragment
 	for n := root.FirstChild(); n != nil; n = n.NextSibling() {
-		line := nodeLine(src, n)
+		var err error
 		switch n := n.(type) {
 		case *ast.Heading:
-			if n.Level != 3 {
-				return Fragment{}, &FragmentError{Line: line, Msg: fmt.Sprintf("a level-%d heading; a fragment carries level-3 section headings only", n.Level)}
-			}
-			if err := closeSection(); err != nil {
-				return Fragment{}, err
-			}
-			name := headingText(src, n)
-			if name == "" {
-				return Fragment{}, &FragmentError{Line: line, Msg: "a section heading names no section"}
-			}
-			out.Sections = append(out.Sections, FragmentSection{Name: name, Line: line})
-			section = &out.Sections[len(out.Sections)-1]
+			err = out.heading(src, n)
 		case *ast.List:
-			if n.IsOrdered() {
-				return Fragment{}, &FragmentError{Line: line, Msg: "an ordered list; notes are a bullet list"}
-			}
-			if section == nil {
-				return Fragment{}, &FragmentError{Line: line, Msg: "notes under no section; put a level-3 heading such as ### Fixed above them"}
-			}
-			at := line
-			for li := n.FirstChild(); li != nil; li = li.NextSibling() {
-				note, ok := itemText(src, li)
-				if !ok {
-					return Fragment{}, &FragmentError{Line: at, Msg: "an empty note"}
-				}
-				section.Notes = append(section.Notes, note)
-				_, end, _ := span(li)
-				at = lineOf(src, end) + 1
-			}
+			err = out.list(src, n)
 		default:
-			return Fragment{}, &FragmentError{Line: line, Msg: fmt.Sprintf("a %s; a fragment carries level-3 section headings and the notes listed under them only", kindName(n))}
+			err = &FragmentError{Line: nodeLine(src, n), Msg: fmt.Sprintf("a %s; a fragment carries level-3 section headings and the notes listed under them only", kindName(n))}
+		}
+		if err != nil {
+			return Fragment{}, err
 		}
 	}
-	if err := closeSection(); err != nil {
+	if err := out.closeLast(); err != nil {
 		return Fragment{}, err
 	}
 	if len(out.Sections) == 0 {
 		return Fragment{}, &FragmentError{Line: 1, Msg: "no notes; a fragment carries at least one level-3 section heading and a note listed under it"}
 	}
 	return out, nil
+}
+
+// heading opens the section h names, refusing any other level and a section
+// above it that lists nothing.
+func (f *Fragment) heading(src []byte, h *ast.Heading) error {
+	line := nodeLine(src, h)
+	if h.Level != 3 {
+		return &FragmentError{Line: line, Msg: fmt.Sprintf("a level-%d heading; a fragment carries level-3 section headings only", h.Level)}
+	}
+	if err := f.closeLast(); err != nil {
+		return err
+	}
+	name := headingText(src, h)
+	if name == "" {
+		return &FragmentError{Line: line, Msg: "a section heading names no section"}
+	}
+	f.Sections = append(f.Sections, FragmentSection{Name: name, Line: line})
+	return nil
+}
+
+// list adds the items of l as notes of the last section.
+func (f *Fragment) list(src []byte, l *ast.List) error {
+	line := nodeLine(src, l)
+	if l.IsOrdered() {
+		return &FragmentError{Line: line, Msg: "an ordered list; notes are a bullet list"}
+	}
+	if len(f.Sections) == 0 {
+		return &FragmentError{Line: line, Msg: "notes under no section; put a level-3 heading such as ### Fixed above them"}
+	}
+	section := &f.Sections[len(f.Sections)-1]
+	at := line
+	for li := l.FirstChild(); li != nil; li = li.NextSibling() {
+		note, ok := itemText(src, li)
+		if !ok {
+			return &FragmentError{Line: at, Msg: "an empty note"}
+		}
+		section.Notes = append(section.Notes, note)
+		_, end, _ := span(li)
+		at = lineOf(src, end) + 1
+	}
+	return nil
+}
+
+// closeLast refuses a last section that lists no notes.
+func (f *Fragment) closeLast() error {
+	if n := len(f.Sections); n > 0 && len(f.Sections[n-1].Notes) == 0 {
+		s := f.Sections[n-1]
+		return &FragmentError{Line: s.Line, Msg: fmt.Sprintf("section %q lists no notes", s.Name)}
+	}
+	return nil
 }
 
 // LintFragment reports what keeps src from folding cleanly: a fragment-form
@@ -134,18 +154,52 @@ func LintFragment(src []byte, opts Options) []Finding {
 // entry, in order, exactly as Append would one at a time, and returns the
 // edited document; src is not modified.
 func Fold(src []byte, frags ...Fragment) ([]byte, error) {
+	return foldWith(Append, src, frags)
+}
+
+// FoldOpen appends every note of frags to the open entry as Fold does to
+// [Unreleased]. It is an error for the newest versioned entry not to be open.
+func FoldOpen(src []byte, frags ...Fragment) ([]byte, error) {
+	if _, err := locate(src).open(); err != nil {
+		return nil, err
+	}
+	return foldWith(AppendOpen, src, frags)
+}
+
+func foldWith(add func([]byte, string, string) ([]byte, error), src []byte, frags []Fragment) ([]byte, error) {
 	out := slices.Clone(src)
 	for _, frag := range frags {
 		for _, s := range frag.Sections {
 			for _, note := range s.Notes {
 				var err error
-				if out, err = Append(out, s.Name, note); err != nil {
+				if out, err = add(out, s.Name, note); err != nil {
 					return nil, err
 				}
 			}
 		}
 	}
 	return out, nil
+}
+
+// ReleasePending releases what the document has pending, dated date, with frags
+// folded in: the open entry where the newest versioned entry is one, closed as
+// Close does, and otherwise the [Unreleased] entry as ReleaseFragments does at
+// the version its notes call for. It returns the edited document and the
+// version released.
+func ReleasePending(src []byte, frags []Fragment, date string) ([]byte, semver.Version, error) {
+	open, ok := Parse(src).Latest()
+	if !ok || open.Date != "" {
+		return ReleaseFragments(src, frags, nil, date)
+	}
+	folded, err := FoldOpen(src, frags...)
+	if err != nil {
+		return nil, semver.Version{}, err
+	}
+	out, err := Close(folded, date)
+	if err != nil {
+		return nil, semver.Version{}, err
+	}
+	return out, open.Semver, nil
 }
 
 // itemText returns a list item's source without its marker, continuation lines
@@ -199,4 +253,45 @@ func kindName(n ast.Node) string {
 		return "link reference definition"
 	}
 	return strings.ToLower(n.Kind().String())
+}
+
+// ReleaseFragments folds frags into the [Unreleased] entry and releases it as
+// Release does, at version or, where version is nil, at the version Next calls
+// for. It returns the edited document and the version released; src is not
+// modified.
+func ReleaseFragments(src []byte, frags []Fragment, version *semver.Version, date string) ([]byte, semver.Version, error) {
+	folded, err := Fold(src, frags...)
+	if err != nil {
+		return nil, semver.Version{}, err
+	}
+	var v semver.Version
+	if version != nil {
+		v = *version
+	} else if v, err = Parse(folded).Next(); err != nil {
+		return nil, semver.Version{}, err
+	}
+	out, err := Release(folded, v, date)
+	if err != nil {
+		return nil, semver.Version{}, err
+	}
+	return out, v, nil
+}
+
+// Notes returns every list item of the entry's top-level lists, without its
+// marker, in document order, as a fragment's notes are read.
+func (e Entry) Notes() []string {
+	src := []byte(e.Body)
+	root := goldmark.New().Parser().Parse(text.NewReader(src))
+	var out []string
+	for n := root.FirstChild(); n != nil; n = n.NextSibling() {
+		if _, ok := n.(*ast.List); !ok {
+			continue
+		}
+		for li := n.FirstChild(); li != nil; li = li.NextSibling() {
+			if note, ok := itemText(src, li); ok {
+				out = append(out, note)
+			}
+		}
+	}
+	return out
 }

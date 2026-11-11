@@ -120,8 +120,9 @@ it, waiting for a release to fold it into `[Unreleased]`.
 _Avoid_: changeset, news file, snippet
 
 **Fold**:
-Appending every note of every fragment to `[Unreleased]`, in fragment name
-order, and deleting the fragments once the changelog is written.
+Appending every note of every fragment to the open entry, or to `[Unreleased]`
+where none is open, in fragment name order, and deleting the fragments once the
+changelog is written.
 _Avoid_: merge, collect, compile
 
 **Bump**:
@@ -189,6 +190,7 @@ ceremony)
 
 - **Append → `[Unreleased]`**: append adds a note to a section of `[Unreleased]`
 - **Fragment → Fold → `[Unreleased]`**: release folds the fragments into `[Unreleased]` before releasing it, so a fragment's notes reach a version through `[Unreleased]` like any other
+- **Fragment → Fold → Open entry**: on a stabilization branch the fragments fold into the open entry, which the merge to the trunk dates
 - **Release → `[Unreleased]`**: release turns `[Unreleased]` into an open or released entry, and opens an empty `[Unreleased]` above it
 - **Bump → Released entry, Section, Breaking marker**: the bump starts from the newest final version and is decided by the sections and breaking markers `[Unreleased]` carries
 - **Writer → Ceremony**: a writer changes the file and nothing else; committing it and the ceremony that follows are downstream

@@ -4,5 +4,6 @@
 !.github
 !.forgejo
 !.changelog
+!.golangci.yaml
 /dist/
 /changelog

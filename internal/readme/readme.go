@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"sarak.sh/mikluko/changelog/pkg/changelog"
+	"sarak.sh/mikluko/changelog/v2/pkg/changelog"
 )
 
 // The markers delimiting the generated region. They are HTML comments, so they

@@ -3,16 +3,18 @@ run-name: 🏗️ Candidate for ${{ github.base_ref }}
 
 # A candidate per revision of a pull request into a stabilization branch.
 #
-# paths is what makes the changelog decide: a pull request that touches no
-# changelog proposes no release, so nothing is cut and this never runs. The
-# filter is a three-dot diff over the whole pull request, so once a revision
-# names the release every later revision still matches and the ordinal advances.
+# paths is what makes the changelog decide: a pull request that touches neither
+# the changelog nor a fragment proposes nothing for the release, so nothing is
+# cut and this never runs. The filter is a three-dot diff over the whole pull
+# request, so once a revision proposes something every later revision still
+# matches and the ordinal advances.
 on:
   pull_request:
     branches:
       - 'release/*'
     paths:
       - CHANGELOG.md
+      - '.changelog/**'
 
 # Not canceled: a run may be part-way through pushing a tag.
 concurrency:
@@ -33,7 +35,7 @@ jobs:
         with:
           fetch-depth: 0
       - id: changelog
-        uses: mikluko/action-changelog@v1
+        uses: mikluko/action-changelog/actions/validate@v2
         with:
           sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
           error: prerelease-entry
@@ -76,7 +78,7 @@ jobs:
           # spelled v<version>-<stage> names no stage of this version: either it
           # or the entry is wrong, and they have to agree.
           stage="${BASE#release/}"
-          stage="${stage#v$VERSION-}"
+          stage="${stage#"v$VERSION"-}"
           case "$BASE" in
             "release/v$VERSION-$stage") ;;
             *) echo "::error::$BASE names no stage of v$VERSION"; exit 1 ;;

@@ -1,7 +1,7 @@
 package changelog
 
 import (
-	"sarak.sh/mikluko/changelog/pkg/semver"
+	"sarak.sh/mikluko/changelog/v2/pkg/semver"
 )
 
 // Git is what the tag-dependent checks read about the repository the document

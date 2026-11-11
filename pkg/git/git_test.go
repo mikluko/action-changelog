@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"sarak.sh/mikluko/changelog/pkg/git"
+	"sarak.sh/mikluko/changelog/v2/pkg/git"
 )
 
 const (
@@ -533,5 +533,54 @@ func TestTagDayIsInTheTagsOwnZone(t *testing.T) {
 	}
 	if got := day(t, r, tags, "v1.1.0"); got != "2026-03-02" {
 		t.Errorf("v1.1.0 was cut on %q, want 2026-03-02; UTC would say 2026-03-01", got)
+	}
+}
+
+// The merge base, not the target's tip, is what a pull request's fragments are
+// read against: a fragment the target has since folded and deleted was still
+// there when the branch forked, so the branch did not add it.
+func TestMergeBaseReadsTheForkPoint(t *testing.T) {
+	dir := repo(t)
+	if err := os.Mkdir(filepath.Join(dir, ".changelog"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, ".changelog/old.md", "x\n")
+	run(t, dir, "add", ".")
+	run(t, dir, "commit", "-m", "an old fragment")
+	run(t, dir, "switch", "-c", "feature")
+	write(t, dir, ".changelog/new.md", "x\n")
+	run(t, dir, "add", ".")
+	run(t, dir, "commit", "-m", "a new fragment")
+	run(t, dir, "switch", "main")
+	run(t, dir, "rm", "-q", ".changelog/old.md")
+	run(t, dir, "commit", "-m", "a release folds the old fragment")
+	run(t, dir, "switch", "feature")
+
+	r, err := git.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap, err := r.MergeBase("main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := snap.Files(".changelog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, ",") != "old.md" {
+		t.Errorf("files at the merge base are %v, want [old.md]", got)
+	}
+	if got, err := snap.Files("absent"); err != nil || len(got) != 0 {
+		t.Errorf("an absent directory gives %v, %v", got, err)
+	}
+	if src, err := snap.File(".changelog/old.md"); err != nil || string(src) != "x\n" {
+		t.Errorf("old.md at the merge base reads %q, %v", src, err)
+	}
+	if _, err := snap.File(".changelog/new.md"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("new.md at the merge base: %v, want os.ErrNotExist", err)
+	}
+	if _, err := r.MergeBase("nowhere"); err == nil {
+		t.Error("no error for a base that names nothing")
 	}
 }
