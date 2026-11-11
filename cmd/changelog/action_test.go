@@ -17,16 +17,16 @@ import (
 // The two references a workflow resolves this action by: the GitHub mirror,
 // and the Forgejo repository it is developed in.
 const (
-	action        = "mikluko/action-changelog@"
-	forgejoAction = "https://sarak.sh/mikluko/changelog@"
+	action        = "mikluko/action-changelog/actions/validate@"
+	forgejoAction = "https://sarak.sh/mikluko/changelog/actions/validate@"
 )
 
 // actions is every reference a documented invocation may use: the reader at
 // the root and each writer in its subdirectory, under either name.
 var actions = []string{
 	action, forgejoAction,
-	"mikluko/action-changelog/append@", "https://sarak.sh/mikluko/changelog/append@",
-	"mikluko/action-changelog/release@", "https://sarak.sh/mikluko/changelog/release@",
+	"mikluko/action-changelog/actions/append@", "https://sarak.sh/mikluko/changelog/actions/append@",
+	"mikluko/action-changelog/actions/release@", "https://sarak.sh/mikluko/changelog/actions/release@",
 }
 
 // actionFile is the part of action.yaml the tests hold to the code.
@@ -53,9 +53,9 @@ var actionFiles = []struct {
 	path    string
 	outputs []output.Output
 }{
-	{"action.yaml", outputs(changelog.Parse(nil), repoState{}, nil, "")},
-	{"append/action.yaml", nil},
-	{"release/action.yaml", releaseOutputs(semver.Version{}, "")},
+	{"actions/validate/action.yaml", outputs(changelog.Parse(nil), repoState{}, nil, "")},
+	{"actions/append/action.yaml", nil},
+	{"actions/release/action.yaml", releaseOutputs(semver.Version{}, "")},
 }
 
 // readAction returns the action at path, the step installing the binary, and
@@ -110,12 +110,12 @@ func TestVersionMatchesTheChangelog(t *testing.T) {
 	}
 }
 
-// Every action installs the binary with the one script at the repository root,
-// reached from the action's own directory.
+// Every action installs the binary with the one script in actions/, reached
+// from the action's own directory.
 func TestActionInstallsWithTheSharedScript(t *testing.T) {
 	for _, a := range actionFiles {
 		_, install, _ := readAction(t, a.path)
-		rel, err := filepath.Rel(filepath.Dir(a.path), "install.sh")
+		rel, err := filepath.Rel(filepath.Dir(a.path), "actions/install.sh")
 		if err != nil {
 			t.Fatal(err)
 		}
