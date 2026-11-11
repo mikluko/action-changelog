@@ -61,6 +61,7 @@ Every input is optional.
 | Input | Default | Description |
 |---|---|---|
 | `changelog` | `CHANGELOG.md` | Path to the changelog, relative to the workspace. |
+| `fragments` | *(empty)* | Directory of [fragments](#fragments) to check, relative to the workspace. Empty checks none. |
 | `sections` | *(empty)* | Comma-separated level-3 headings to accept. Empty accepts the Keep a Changelog six: Added, Changed, Deprecated, Removed, Fixed, Security. |
 | `error` | *(empty)* | Comma-separated checks to raise as errors. |
 | `warn` | *(empty)* | Comma-separated checks to raise as warnings. |
@@ -198,6 +199,7 @@ annotation, and which is what `error`, `warn` and `off` take.
 | `prerelease-entry` | `off` | Policy: no entry names a pre-release version. Off by default; pre-release headings are legal. |
 | `oci-incompatible-version` | `error` | A version can be an OCI tag. This is the one check whose subject is outside the document: build metadata is valid Semantic Versioning and the OCI tag grammar [a-zA-Z0-9_][a-zA-Z0-9._-]{0,127} has no +, so such a version cuts a git tag and is then not a name a registry takes. Switch it off where nothing is published. |
 | `undated-entry` | `error` | Policy: the newest entry states a date, where no final tag yet names its version. Switched off, that entry is open: a release still accumulating on a branch of its own, whether or not a candidate has been cut from it. |
+| `fragment-form` | `error` | Each file in the fragments directory is a fragment: a Markdown file carrying level-3 section headings, each with a bullet list of notes, and nothing else. Silent where no fragments directory is given. |
 | `undated-release` | `error` | The newest entry states a date, where a final tag already names its version. The release shipped and nobody dated it. A candidate tag is not one: it ships undated, which is what a stabilization branch is for. |
 | `no-git-tags` | `error` | The repository's tag history can be read, which every check comparing against it needs. |
 | `version-behind-tag` | `error` | The newest entry is not behind the reference tag. |
@@ -392,6 +394,7 @@ Turns the `[Unreleased]` entry into a versioned one and opens a new, empty
 | Input | Default | Description |
 |---|---|---|
 | `changelog` | `CHANGELOG.md` | Path to the changelog, relative to the workspace. |
+| `fragments` | *(empty)* | Directory of [fragments](#fragments) to fold into `[Unreleased]` first and delete. Empty folds none. |
 | `version` | *(empty)* | The version to release. Empty computes it from the notes. |
 | `date` | *(empty)* | The release date as `YYYY-MM-DD`. Empty is today in UTC. |
 | `open` | `false` | `true` writes an [open entry](#two-worked-policies), naming the version and no date. |
@@ -418,6 +421,56 @@ that URL is.
 The action refuses an `[Unreleased]` entry with no notes, a version not above
 every version the document names, and a document whose newest versioned entry
 is still open.
+
+### Fragments
+
+Pull requests that each add a note under `[Unreleased]` conflict with one
+another on the same lines. A fragment moves the note out of `CHANGELOG.md`
+into a file of its own, which nothing else touches, and the release stacks
+every fragment into the changelog.
+
+A fragment is a Markdown file in one directory, `.changelog/` by convention,
+carrying level-3 section headings and the notes listed under them, exactly as
+they would read under `[Unreleased]`:
+
+```markdown
+### Fixed
+
+- The parser no longer reads a fenced heading as an entry.
+```
+
+The file name is the author's to choose, and it orders the fragments: the
+release folds them in name order. Anything else in the file, a note under no
+section, or a file in the directory not named `*.md`, is refused rather than
+dropped. Names starting with a dot are skipped, so a `.gitkeep` can hold the
+directory open.
+
+The reader checks them when given the directory, reporting each finding against
+the fragment's own file:
+
+```yaml
+- uses: mikluko/action-changelog@v1
+  with:
+    fragments: .changelog
+```
+
+`fragment-form` reports a file that is not a fragment, and `unknown-section`
+reports a heading outside `sections`, so a fragment that would not fold fails
+the pull request adding it rather than the release.
+
+The release action, given the same directory, folds every fragment into
+`[Unreleased]` as `append` would one note at a time, releases the result, and
+deletes the fragments it folded:
+
+```yaml
+- uses: mikluko/action-changelog/release@v1
+  with:
+    fragments: .changelog
+```
+
+One fragment it cannot read refuses the release with nothing written. A
+fragment carries notes and never a version: the version is computed from the
+folded notes and written into the changelog, and the tag still follows the file.
 
 ## Local use
 
@@ -449,6 +502,7 @@ The writers are subcommands, taking their inputs as flags of the same name:
 ```
 go run sarak.sh/mikluko/changelog/cmd/changelog@latest append -section Fixed -note "<note>"
 go run sarak.sh/mikluko/changelog/cmd/changelog@latest release
+go run sarak.sh/mikluko/changelog/cmd/changelog@latest release -fragments .changelog
 ```
 
 The Go packages the command is built on are importable:
@@ -468,7 +522,10 @@ rewritten onto `main` afterwards. A release is therefore written in the pull
 request, in two places a test holds together:
 
 1. `CHANGELOG.md` gains `## [1.2.3] - YYYY-MM-DD` above the previous entry.
-2. `action.yaml` sets `VERSION: 1.2.3` on its `run` step.
+   `go run ./cmd/changelog release -fragments .changelog` writes it, folding the
+   fragments pull requests have left in `.changelog/` and deleting them.
+2. `action.yaml`, `append/action.yaml` and `release/action.yaml` set
+   `VERSION: 1.2.3` on their `install` step.
 
 `go test ./...` fails while those disagree. Merging is the whole of it. The
 release workflow on Forgejo runs the action against this repository's own
@@ -489,6 +546,9 @@ the inversion the tool exists to support.
 Contributions are welcome. This is maintained in spare time and there is no
 commitment to review a pull request promptly, so an issue first is usually the
 cheaper way to find out whether a change is wanted.
+
+A change worth a changelog note carries it as a [fragment](#fragments) in
+`.changelog/`, never as an edit to `CHANGELOG.md`, which only a release writes.
 
 AI-assisted contributions are welcome too, and are asked to be attributed: name
 the tool in the pull request, or leave a `Co-authored-by:` trailer on the

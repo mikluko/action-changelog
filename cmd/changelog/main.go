@@ -54,6 +54,7 @@ func main() {
 func inspect() {
 	var (
 		path       = flag.String("changelog", "CHANGELOG.md", "path to the changelog")
+		fragments  = flag.String("fragments", "", "directory of fragments to check; none when empty")
 		sections   = flag.String("sections", "", "comma-separated level-3 headings to accept; the Keep a Changelog six when empty")
 		asError    = flag.String("error", "", "comma-separated checks to raise as errors")
 		asWarning  = flag.String("warn", "", "comma-separated checks to raise as warnings")
@@ -92,6 +93,11 @@ func inspect() {
 	if err != nil {
 		fail(err)
 	}
+	fragmentFindings, err := lintFragments(*fragments, opts, os.Stderr, os.Stdout)
+	if err != nil {
+		fail(err)
+	}
+	findings = append(findings, fragmentFindings...)
 	reason := notDue(doc, repo, *duePre)
 	if err := emit(outputs(doc, repo, findings, reason), os.Stdout); err != nil {
 		fail(err)
@@ -122,7 +128,13 @@ func run(path string, opts changelog.Options, log, annotations io.Writer) (*chan
 	}
 	doc := changelog.Parse(src)
 	findings := doc.Lint(opts)
+	report(path, findings, log, annotations)
+	return doc, findings, nil
+}
 
+// report writes each finding about the file at path to log and, under GitHub
+// Actions, to annotations as a workflow command titled with the check's name.
+func report(path string, findings []changelog.Finding, log, annotations io.Writer) {
 	annotate := os.Getenv("GITHUB_ACTIONS") == "true"
 	for _, f := range findings {
 		fmt.Fprintf(log, "%s:%d: %s: %s (%s)\n", path, f.Line, f.Severity, f.Msg, f.Check)
@@ -130,7 +142,6 @@ func run(path string, opts changelog.Options, log, annotations io.Writer) (*chan
 			fmt.Fprintf(annotations, "::%s file=%s,line=%d,title=%s::%s\n", f.Severity, path, f.Line, f.Check, f.Msg)
 		}
 	}
-	return doc, findings, nil
 }
 
 // red reports whether anything found is bad enough to turn the build red.

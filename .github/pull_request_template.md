@@ -4,7 +4,7 @@
 
 ## Checklist
 
-- [ ] `CHANGELOG.md` gained an entry under `[Unreleased]`, or this change needs none.
+- [ ] `.changelog/` gained a fragment carrying this change's notes, or this change needs none.
 - [ ] AI assistance is declared below.
 
 ## AI assistance

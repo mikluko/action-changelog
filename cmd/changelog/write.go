@@ -36,16 +36,18 @@ func appendCmd(args []string, stderr io.Writer) error {
 	})
 }
 
-// releaseCmd turns the [Unreleased] entry into a versioned one, writes the
-// document back, and reports the version and the notes it released.
+// releaseCmd folds the fragments into the [Unreleased] entry, turns it into a
+// versioned one, writes the document back, deletes the fragments, and reports
+// the version and the notes it released.
 func releaseCmd(args []string, stdout, stderr io.Writer, now func() time.Time) error {
 	fs := flag.NewFlagSet("release", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var (
-		path    = fs.String("changelog", "CHANGELOG.md", "path to the changelog")
-		version = fs.String("version", "", "version to release; computed from the notes when empty")
-		date    = fs.String("date", "", "release date as YYYY-MM-DD; today in UTC when empty")
-		open    = fs.Bool("open", false, "write an open entry, naming the version and no date")
+		path      = fs.String("changelog", "CHANGELOG.md", "path to the changelog")
+		fragments = fs.String("fragments", "", "directory of fragments to fold into [Unreleased] and delete; none when empty")
+		version   = fs.String("version", "", "version to release; computed from the notes when empty")
+		date      = fs.String("date", "", "release date as YYYY-MM-DD; today in UTC when empty")
+		open      = fs.Bool("open", false, "write an open entry, naming the version and no date")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -64,8 +66,16 @@ func releaseCmd(args []string, stdout, stderr io.Writer, now func() time.Time) e
 		day = now().UTC().Format("2006-01-02")
 	}
 
+	consumed, frags, err := readFragments(*fragments)
+	if err != nil {
+		return err
+	}
 	var released semver.Version
-	err := rewrite(*path, func(src []byte) ([]byte, error) {
+	err = rewrite(*path, func(src []byte) ([]byte, error) {
+		src, err := changelog.Fold(src, frags...)
+		if err != nil {
+			return nil, err
+		}
 		v, err := releaseVersion(changelog.Parse(src), *version)
 		if err != nil {
 			return nil, err
@@ -75,6 +85,11 @@ func releaseCmd(args []string, stdout, stderr io.Writer, now func() time.Time) e
 	})
 	if err != nil {
 		return err
+	}
+	for _, p := range consumed {
+		if err := os.Remove(p); err != nil {
+			return fmt.Errorf("%s is released and the fragment is not deleted: %w", *path, err)
+		}
 	}
 
 	src, err := os.ReadFile(*path)
