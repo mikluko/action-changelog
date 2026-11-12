@@ -104,6 +104,76 @@ func TestReferenceIsReachableFromHead(t *testing.T) {
 	}
 }
 
+// A linked worktree has a HEAD of its own, and the main checkout's is the one
+// in the common directory. Reading that one reported the newest tag reachable
+// from the main checkout for a worktree standing anywhere else, which is where
+// every Worker of a city runs the tool.
+func TestReferenceReadsALinkedWorktreesOwnHead(t *testing.T) {
+	main := repo(t)
+	write(t, main, "CHANGELOG.md", oldChangelog)
+	run(t, main, "add", "CHANGELOG.md")
+	run(t, main, "commit", "-m", "the first release")
+	run(t, main, "tag", "v0.1.0")
+
+	// The main checkout stays on v0.1.0, and both worktrees go past v0.2.0.
+	onBranch := filepath.Join(t.TempDir(), "on-branch")
+	run(t, main, "worktree", "add", "-b", "feature", onBranch)
+	write(t, onBranch, "CHANGELOG.md", newChangelog)
+	run(t, onBranch, "commit", "-am", "the second release")
+	run(t, onBranch, "tag", "v0.2.0")
+	run(t, onBranch, "commit", "--allow-empty", "-m", "work after it")
+
+	detached := filepath.Join(t.TempDir(), "detached")
+	run(t, main, "worktree", "add", "--detach", detached, "v0.2.0")
+
+	for name, dir := range map[string]string{"main checkout": main, "worktree on a branch": onBranch, "detached worktree": detached} {
+		want := "v0.2.0"
+		if dir == main {
+			want = "v0.1.0"
+		}
+		if got := reference(t, dir, git.Final); got != want {
+			t.Errorf("the reference in the %s is %q, want %s", name, got, want)
+		}
+	}
+}
+
+// The merge base is read from HEAD as well, so a linked worktree gets its own
+// fork point and not the main checkout's.
+func TestMergeBaseReadsALinkedWorktreesOwnHead(t *testing.T) {
+	main := repo(t)
+	write(t, main, "CHANGELOG.md", oldChangelog)
+	run(t, main, "add", "CHANGELOG.md")
+	run(t, main, "commit", "-m", "the first release")
+	run(t, main, "checkout", "-b", "other")
+	write(t, main, "CHANGELOG.md", newChangelog)
+	run(t, main, "commit", "-am", "the second release")
+	run(t, main, "checkout", "main")
+
+	// The worktree branches from "other", so its fork point with main is the
+	// first commit, and the main checkout's HEAD is main itself.
+	tree := filepath.Join(t.TempDir(), "linked")
+	run(t, main, "worktree", "add", "-b", "feature", tree, "other")
+	write(t, tree, "extra.md", "x\n")
+	run(t, tree, "add", "extra.md")
+	run(t, tree, "commit", "-m", "work on the feature")
+
+	r, err := git.Open(tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap, err := r.MergeBase("other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := snap.File("CHANGELOG.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != newChangelog {
+		t.Errorf("the merge base of the worktree's HEAD and other is not other's tip:\n%s", got)
+	}
+}
+
 // A release candidate above the newest final is the case the default exists
 // for: the candidate is a tag nobody wants as a baseline, and a repository that
 // does want it says so.
