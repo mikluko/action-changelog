@@ -201,7 +201,7 @@ var Checks = []Check{
 	},
 	{
 		Name:        CheckPendingDateMismatch,
-		Description: "A release that is due is dated the day a tag cut on HEAD would carry: the newest entry, where no tag names its version, states the committer date of HEAD, in the offset HEAD records, which is the day a lightweight tag cut there carries. While it fires the release is not due. Silent where the day is not known before the tag is cut, which is an annotated tag's, where the repository has no version tag to say which kind it cuts, and for an entry the reference tag has frozen or one stating no date.",
+		Description: "A release that is due is dated the day a tag cut on HEAD would carry: the newest entry, where no tag names its version, states the committer date of HEAD, in the offset HEAD records, which is the day a lightweight tag cut there carries. While it fires the release is not due. Silent where the day is not known before the tag is cut, which is an annotated tag's, where the repository has no version tag to say which kind it cuts, for an entry the reference tag has frozen or one stating no date, and where the changelog is not the one HEAD records, as a release folded in and not yet committed is, since HEAD is then not the commit the tag will be cut on.",
 		Default:     Error,
 	},
 	{

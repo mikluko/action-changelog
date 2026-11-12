@@ -860,3 +860,33 @@ func TestTheDateCheckIsSilentWhereTheTagDayIsNotKnownBeforehand(t *testing.T) {
 		}
 	})
 }
+
+// The day a tag cut on HEAD would carry is HEAD's, and it is the day to compare
+// only where HEAD is the commit the tag will name. A changelog edited since
+// HEAD, as a release folded in from fragments and not yet committed is, will be
+// committed first, and the tag is cut on that commit: there is no day to ask the
+// entry for, so the check is silent and the release is due. The release workflow
+// folds and validates before it commits, and a day later than HEAD's would
+// otherwise stop every release it runs.
+func TestTheDateCheckIsSilentForAChangelogNotYetCommitted(t *testing.T) {
+	// HEAD is from 2026-03-02, and the entry, folded and dated by a later day, is
+	// not on it.
+	path := pendingFixture(t, "2026-03-02", "2026-03-02T12:00:00+00:00", false)
+	folded := "# Changelog\n\n## [1.1.0] - 2026-03-05\n\n### Added\n\n- a thing\n\n" +
+		"## [1.0.0] - 2026-01-01\n\n### Added\n\n- the first thing\n"
+	if err := os.WriteFile(path, []byte(folded), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out := emitted(t, path, state(path, git.Final)); out["due"] != "true" || out["valid"] != "true" {
+		t.Errorf("due=%q valid=%q, want both true: %v", out["due"], out["valid"], out)
+	}
+
+	// Committed, the same entry is the commit a tag would be cut on, and the day
+	// is asked for again.
+	dir := filepath.Dir(path)
+	gitcmd(t, dir, "add", "CHANGELOG.md")
+	gitcmdWhen(t, dir, "2026-03-02T12:00:00+00:00", "commit", "-m", "release: 1.1.0")
+	if out := emitted(t, path, state(path, git.Final)); out["due"] != "false" || out["valid"] != "false" {
+		t.Errorf("committed, due=%q valid=%q, want both false: %v", out["due"], out["valid"], out)
+	}
+}

@@ -6,8 +6,11 @@
   heading names red for good once it is tagged; this raises it while the entry
   can still be edited. For a lightweight tag that day is the committer date of
   HEAD in the offset HEAD records, read by the code that dates an existing tag.
-  It is silent for an annotated tag, dated when it is cut, and where the
-  repository has no version tag to say which kind it cuts.
+  It is silent for an annotated tag, dated when it is cut, where the
+  repository has no version tag to say which kind it cuts, and where the
+  changelog differs from HEAD's, as a release folded in from fragments and not
+  yet committed does: the tag is not cut on HEAD then. The `fragments-release`
+  forecast leaves it out for the same reason.
 - `Git.NextTagDay` and `Options.DuePrerelease` in `pkg/changelog`, and
   `Repo.NextDay` in `pkg/git`.
 

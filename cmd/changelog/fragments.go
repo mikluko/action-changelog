@@ -155,7 +155,16 @@ func forecast(path, dir string, opts changelog.Options, current []changelog.Find
 		for _, f := range current {
 			seen[key{f.Check, f.Msg}] = true
 		}
-		for _, f := range changelog.Parse(released).Lint(opts) {
+		// A release is cut on a commit not yet made, so the day a tag cut on
+		// HEAD would carry is not the day of this one: the forecast lints it
+		// without that day, and pending-date-mismatch is silent in it.
+		forecasted := opts
+		if opts.Git != nil {
+			g := *opts.Git
+			g.NextTagDay = ""
+			forecasted.Git = &g
+		}
+		for _, f := range changelog.Parse(released).Lint(forecasted) {
 			if !seen[key{f.Check, f.Msg}] {
 				out = append(out, finding("releasing %s with the fragments folded in raises %s: %s", v, f.Check, f.Msg))
 			}

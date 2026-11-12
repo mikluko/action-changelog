@@ -167,7 +167,9 @@ while `release-entry-modified` forbade the edit. The day a tag cut on `HEAD`
 would carry is known only for a lightweight tag, which is dated by the committer
 date of the commit it names, in the offset that commit records. For an annotated
 tag, dated when it is cut, the check is silent, and so is it where the repository
-has no version tag to say which kind it cuts. A repository whose release merged
+has no version tag to say which kind it cuts, and where the changelog differs
+from the one `HEAD` records, as a release folded in and not yet committed does:
+the tag is cut on the commit that will carry it, not on `HEAD`. A repository whose release merged
 late repairs the entry before any tag exists: it opens a pull request dating the
 heading with the day the merge commit will carry, and merges it that day.
 
@@ -221,7 +223,7 @@ annotation, and which is what `error`, `warn` and `off` take.
 | `version-behind-tag` | `error` | The newest entry is not behind the reference tag. |
 | `release-entry-modified` | `error` | A released entry is unchanged since the reference tag. |
 | `prerelease-entry-modified` | `error` | A released pre-release entry is unchanged since the reference tag. |
-| `pending-date-mismatch` | `error` | A release that is due is dated the day a tag cut on HEAD would carry: the newest entry, where no tag names its version, states the committer date of HEAD, in the offset HEAD records, which is the day a lightweight tag cut there carries. While it fires the release is not due. Silent where the day is not known before the tag is cut, which is an annotated tag's, where the repository has no version tag to say which kind it cuts, and for an entry the reference tag has frozen or one stating no date. |
+| `pending-date-mismatch` | `error` | A release that is due is dated the day a tag cut on HEAD would carry: the newest entry, where no tag names its version, states the committer date of HEAD, in the offset HEAD records, which is the day a lightweight tag cut there carries. While it fires the release is not due. Silent where the day is not known before the tag is cut, which is an annotated tag's, where the repository has no version tag to say which kind it cuts, for an entry the reference tag has frozen or one stating no date, and where the changelog is not the one HEAD records, as a release folded in and not yet committed is, since HEAD is then not the commit the tag will be cut on. |
 | `missing-fragment` | `error` | A pull request carries notes: a fragment its merge base with the base branch lacks, or a note the changelog there lacks, which is how a release branch assembling its entry carries them. Silent where no base branch is given, which is outside a pull request, and where no fragments directory is. |
 
 <!-- checks:end -->

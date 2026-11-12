@@ -265,6 +265,33 @@ func (r *Repo) FileAt(tag, path string) ([]byte, error) {
 	return nil, fmt.Errorf("no tag %s: %w", tag, os.ErrNotExist)
 }
 
+// HeadFile returns the contents of path in the tree HEAD names, as FileAt does
+// for a tag, and reports an error wrapping os.ErrNotExist where HEAD carries no
+// such file.
+func (r *Repo) HeadFile(path string) ([]byte, error) {
+	h, err := r.head()
+	if err != nil {
+		return nil, err
+	}
+	commit, err := r.commit(h)
+	if err != nil {
+		return nil, err
+	}
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil, err
+	}
+	f, err := tree.File(path)
+	if err != nil {
+		return nil, fmt.Errorf("%s at HEAD: %w", path, os.ErrNotExist)
+	}
+	s, err := f.Contents()
+	if err != nil {
+		return nil, err
+	}
+	return []byte(s), nil
+}
+
 // commit resolves what a tag reference points at, following annotated tag
 // objects, which may in principle name another tag.
 func (r *Repo) commit(h plumbing.Hash) (*object.Commit, error) {

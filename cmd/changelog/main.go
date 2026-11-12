@@ -7,6 +7,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -243,7 +244,7 @@ func state(path string, admit git.Eligible) repoState {
 		if shallow {
 			return repoState{Check: &changelog.Git{Err: errors.New("the checkout is shallow and reaches no version tag")}}
 		}
-		return repoState{Check: &changelog.Git{Tags: tagNames(tags), TagDays: tagDays(repo, tags), NextTagDay: nextTagDay(repo, tags)}, Tags: tags}
+		return repoState{Check: &changelog.Git{Tags: tagNames(tags), TagDays: tagDays(repo, tags), NextTagDay: nextTagDay(repo, tags, path)}, Tags: tags}
 	}
 
 	out := repoState{
@@ -251,7 +252,7 @@ func state(path string, admit git.Eligible) repoState {
 			ReferenceTag: reference.Name,
 			Tags:         tagNames(tags),
 			TagDays:      tagDays(repo, tags),
-			NextTagDay:   nextTagDay(repo, tags),
+			NextTagDay:   nextTagDay(repo, tags, path),
 		},
 		Tags:      tags,
 		Reference: reference.Name,
@@ -381,12 +382,30 @@ func tagDays(repo *git.Repo, tags []git.Tag) map[string]string {
 }
 
 // nextTagDay is the day a tag cut on HEAD would carry, or "" where that is not
-// known beforehand or cannot be read. An unreadable HEAD is left out rather
-// than reported, as an unreadable tag's day is: a history that cannot be read
-// at all is already no-git-tags' to report by name.
-func nextTagDay(repo *git.Repo, tags []git.Tag) string {
+// known beforehand, cannot be read, or is not the day to compare. An unreadable
+// HEAD is left out rather than reported, as an unreadable tag's day is: a
+// history that cannot be read at all is already no-git-tags' to report by name.
+//
+// It is "" too where the changelog at path is not the one HEAD records. A tag
+// is cut on a commit, and a file that differs from HEAD's is one that a commit
+// not yet made will carry, as a release folded in from fragments and not yet
+// committed does: HEAD is then not the commit the tag will name, and its day is
+// not the tag's.
+func nextTagDay(repo *git.Repo, tags []git.Tag, path string) string {
 	day, known, err := repo.NextDay(tags)
 	if err != nil || !known {
+		return ""
+	}
+	rel, err := repoRelative(repo.Root(), path)
+	if err != nil {
+		return ""
+	}
+	committed, err := repo.HeadFile(rel)
+	if err != nil {
+		return ""
+	}
+	working, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(committed, working) {
 		return ""
 	}
 	return day
