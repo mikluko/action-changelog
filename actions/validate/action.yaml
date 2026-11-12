@@ -100,12 +100,15 @@ outputs:
       Whether the newest entry is a release to cut: true when it names a
       version, no tag names that version, and it is not a pre-release unless
       due-prerelease admits one. False where the repository's tags cannot be
-      read. Says nothing about `valid`.
+      read, and while pending-date-mismatch fires: the entry's date is not the
+      day a tag cut on HEAD would carry. Says nothing about `valid`.
     value: ${{ steps.run.outputs.due }}
   due-reason:
     description: >-
-      One sentence saying why `due` is false, as in "1.2.3 is already tagged",
-      also written to the step summary. Empty while `due` is true.
+      One sentence saying why `due` is false, as in "1.2.3 is already tagged"
+      or, for pending-date-mismatch, the day the entry names and the day a tag
+      cut on HEAD would carry. Also written to the step summary. Empty while
+      `due` is true.
     value: ${{ steps.run.outputs['due-reason'] }}
 
 runs:

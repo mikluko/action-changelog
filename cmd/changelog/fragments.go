@@ -155,13 +155,27 @@ func forecast(path, dir string, opts changelog.Options, current []changelog.Find
 		for _, f := range current {
 			seen[key{f.Check, f.Msg}] = true
 		}
-		for _, f := range changelog.Parse(released).Lint(opts) {
+		for _, f := range changelog.Parse(released).Lint(withoutNextTagDay(opts)) {
 			if !seen[key{f.Check, f.Msg}] {
 				out = append(out, finding("releasing %s with the fragments folded in raises %s: %s", v, f.Check, f.Msg))
 			}
 		}
 	}
 	return out, report(path, out, log, annotations)
+}
+
+// withoutNextTagDay is opts with the day a tag cut on HEAD would carry left
+// out, on a copy: the caller's options and their Git are not touched. A release
+// is cut on a commit not yet made, so that day is not the day of the one the
+// forecast folds, and pending-date-mismatch is silent in it.
+func withoutNextTagDay(opts changelog.Options) changelog.Options {
+	if opts.Git == nil {
+		return opts
+	}
+	g := *opts.Git
+	g.NextTagDay = ""
+	opts.Git = &g
+	return opts
 }
 
 // missingFragment reports a missing-fragment finding against the changelog at

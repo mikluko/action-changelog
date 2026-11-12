@@ -59,6 +59,11 @@ type Options struct {
 	// Git is what the repository says about its tags. Nil runs none of the
 	// checks that read it.
 	Git *Git
+	// DuePrerelease says a pre-release counts as a release that is due, which
+	// is what pending-date-mismatch is conditioned on. False leaves a
+	// pre-release entry to that check as to nothing: no tag is about to be
+	// cut for it.
+	DuePrerelease bool
 }
 
 // Lint reports every way c departs from the format, the findings about the
@@ -99,6 +104,7 @@ type linter struct {
 	asOf     string
 	newest   int
 	newestAt string
+	duePre   bool
 }
 
 func newLinter(c *Changelog, opts Options) *linter {
@@ -123,6 +129,7 @@ func newLinter(c *Changelog, opts Options) *linter {
 		frozen:  opts.Git.frozen(),
 		asOf:    today(),
 		newest:  -1,
+		duePre:  opts.DuePrerelease,
 	}
 	// An entry with no date is one of two things and a final tag naming it
 	// tells them apart: a release still being written, or a release that
@@ -142,6 +149,7 @@ func (l *linter) versioned(e, prev Entry) {
 	l.dated(e)
 	l.ordered(e, prev)
 	l.taggedDay(e)
+	l.pendingDay(e)
 	l.carries(e)
 }
 
@@ -203,6 +211,36 @@ func (l *linter) taggedDay(e Entry) {
 		l.f.add(CheckDateMismatch, e.Line,
 			"version %s is dated %s and tag %s was cut on %s",
 			e.Version[1:], e.Date, name, day)
+	}
+}
+
+// pendingDay reports the newest entry, where it is a release about to be cut,
+// dated other than the day the tag cut on HEAD would carry. It is the check
+// date-mismatch cannot be: once the tag exists, date-mismatch demands the entry
+// carry the tag's day and release-entry-modified forbids editing it, so a date
+// that was wrong when the tag was cut leaves a repository no way back to green.
+// Raising it before the tag, and holding the release back while it fires, is
+// the one point where the entry can still be repaired.
+//
+// It is silent wherever there is no date to ask for or no edit to ask for it
+// with: an entry no tag names is the only one pending, an entry stating no
+// date is undated-entry's, an entry the reference tag froze cannot be edited,
+// and a day not known before the tag is cut is not a day to compare.
+func (l *linter) pendingDay(e Entry) {
+	if e.Line != l.newest || l.newestAt != "" || !isDate(e.Date) {
+		return
+	}
+	if e.Semver.Prerelease() && !l.duePre {
+		return
+	}
+	g := l.git
+	if g == nil || g.Err != nil || g.NextTagDay == "" || l.frozen[e.Version] {
+		return
+	}
+	if e.Date != g.NextTagDay {
+		l.f.add(CheckPendingDateMismatch, e.Line,
+			"version %s is dated %s and a tag cut on HEAD would carry %s, so the release is not due; write its date as [%s] - %s",
+			e.Version[1:], e.Date, g.NextTagDay, e.Version[1:], g.NextTagDay)
 	}
 }
 

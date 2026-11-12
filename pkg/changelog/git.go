@@ -34,6 +34,13 @@ type Git struct {
 	// days and knows nothing of either. A tag absent from the map has no day
 	// that could be read, which is not evidence that a date disagrees.
 	TagDays map[string]string
+	// NextTagDay is the day a tag cut on HEAD now would carry, as YYYY-MM-DD,
+	// or "" where that is not known before the tag exists, which is the case
+	// for an annotated tag, dated when it is cut. Which kind of tag a
+	// repository uses and which zone dates it are settled by whoever fills
+	// this in, as for TagDays; pending-date-mismatch compares two calendar
+	// days and says nothing where it has only one.
+	NextTagDay string
 }
 
 // day returns the day the named tag was cut, and whether it is known.

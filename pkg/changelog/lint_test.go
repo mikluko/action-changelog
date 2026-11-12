@@ -1,6 +1,7 @@
 package changelog
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -550,5 +551,107 @@ func TestLintDateMismatchPrefersTheFullestTagSpelling(t *testing.T) {
 	}
 	if !strings.Contains(got[0].Msg, "v1.0.0") || strings.Contains(got[0].Msg, "tag v1 ") {
 		t.Errorf("finding %q names the wrong tag", got[0].Msg)
+	}
+}
+
+// The newest entry is the release about to be cut, and its date is the one a
+// tag cut now would have to match: date-mismatch compares the two once the tag
+// exists, and release-entry-modified then forbids the repair. The day comes from
+// whoever read the repository, so the cases here are the comparison and what
+// silences it.
+func TestLintPendingDateMismatch(t *testing.T) {
+	doc := func(heading string) []string {
+		return []string{
+			"# Changelog", "",
+			heading, "", "### Added", "", "- a thing", "",
+			"## [1.0.0] - 2026-01-01", "", "### Added", "", "- the first thing",
+		}
+	}
+	git := func(next string) *Git {
+		return &Git{
+			ReferenceTag: "v1.0.0",
+			Tags:         []string{"v1.0.0"},
+			TagDays:      map[string]string{"v1.0.0": "2026-01-01"},
+			NextTagDay:   next,
+		}
+	}
+
+	for _, tc := range []struct {
+		name    string
+		heading string
+		git     *Git
+		opts    func(*Options)
+		want    []string
+	}{
+		{name: "the entry on the day", heading: "## [1.1.0] - 2026-03-02", git: git("2026-03-02")},
+		{name: "the entry behind the day", heading: "## [1.1.0] - 2026-03-01", git: git("2026-03-02"), want: []string{CheckPendingDateMismatch}},
+		{name: "the entry ahead of the day", heading: "## [1.1.0] - 2026-03-03", git: git("2026-03-02"), want: []string{CheckPendingDateMismatch}},
+		{name: "the day is not known, as for an annotated tag", heading: "## [1.1.0] - 2026-03-01", git: git("")},
+		{name: "no repository was offered", heading: "## [1.1.0] - 2026-03-01"},
+		{name: "the entry states no date, which undated-entry owns", heading: "## [1.1.0]", git: git("2026-03-02"), want: []string{CheckUndatedEntry}},
+		{
+			// A tag names it: date-mismatch's, with a day of its own to read.
+			name:    "a tag names the entry",
+			heading: "## [1.1.0] - 2026-03-01",
+			git: &Git{
+				Tags:       []string{"v1.1.0"},
+				TagDays:    map[string]string{"v1.1.0": "2026-03-01"},
+				NextTagDay: "2026-03-02",
+			},
+		},
+		{name: "a history that cannot be read", heading: "## [1.1.0] - 2026-03-01", git: &Git{Err: errUnreadable, NextTagDay: "2026-03-02"}, want: []string{CheckNoGitTags}},
+		{name: "a pre-release no tag is cut for", heading: "## [1.1.0-rc.1] - 2026-03-01", git: git("2026-03-02")},
+		{
+			name:    "a pre-release a tag is cut for",
+			heading: "## [1.1.0-rc.1] - 2026-03-01",
+			git:     git("2026-03-02"),
+			opts:    func(o *Options) { o.DuePrerelease = true },
+			want:    []string{CheckPendingDateMismatch},
+		},
+		{
+			// The reference tag's changelog already carried it: the repair would
+			// be an edit release-entry-modified forbids, so asking is no help.
+			name:    "an entry the reference tag froze",
+			heading: "## [1.1.0] - 2026-03-01",
+			git: &Git{
+				ReferenceTag:    "v1.0.0",
+				TaggedChangelog: []byte("# Changelog\n\n## [1.1.0] - 2026-02-01\n\n### Added\n\n- a thing\n"),
+				NextTagDay:      "2026-03-02",
+			},
+			want: []string{CheckReleaseEntryModified},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := Options{Git: tc.git}
+			if tc.opts != nil {
+				tc.opts(&opts)
+			}
+			got := Parse([]byte(strings.Join(doc(tc.heading), "\n"))).Lint(opts)
+			var checks []string
+			for _, f := range got {
+				checks = append(checks, f.Check)
+			}
+			if !slices.Equal(checks, tc.want) {
+				t.Fatalf("findings %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// The message is the whole of what a workflow reads from due-reason, so it
+// carries both days and the heading to write.
+func TestLintPendingDateMismatchSaysWhatToWrite(t *testing.T) {
+	got := lintGit(t, &Git{NextTagDay: "2026-03-02"},
+		"# Changelog", "", "## [1.1.0] - 2026-03-01", "", "### Added", "", "- a thing")
+	if len(got) != 1 || got[0].Check != CheckPendingDateMismatch {
+		t.Fatalf("findings %v, want the %s one", got, CheckPendingDateMismatch)
+	}
+	for _, want := range []string{"1.1.0", "2026-03-01", "2026-03-02", "[1.1.0] - 2026-03-02"} {
+		if !strings.Contains(got[0].Msg, want) {
+			t.Errorf("message %q does not say %q", got[0].Msg, want)
+		}
+	}
+	if got[0].Line != 3 {
+		t.Errorf("the finding is at line %d, want the entry's heading at 3", got[0].Line)
 	}
 }

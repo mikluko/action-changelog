@@ -335,3 +335,28 @@ func TestFoldCmdWithNothingToFold(t *testing.T) {
 		t.Errorf("the file changed:\n%s", got)
 	}
 }
+
+// A forecast is a release onto a commit not yet made, so the day a tag cut on
+// HEAD would carry is not the day to date it by, and pending-date-mismatch,
+// which compares the two, is silent in it. Without that, every pull request of a
+// repository that lints its fragments goes red when CI runs on a later day than
+// its head commit.
+func TestForecastIsSilentOnTheDayATagWouldCarry(t *testing.T) {
+	path, dir := fragmentDir(t, "# Changelog\n\n## [Unreleased]\n\n## [1.2.3] - 2020-01-01\n\n- x\n",
+		map[string]string{"a.md": "### Added\n\n- a\n"})
+	src, _ := os.ReadFile(path)
+	// HEAD's day is the 1st, and the release the fragments fold into is dated the 2nd.
+	opts := changelog.Options{Git: &changelog.Git{NextTagDay: "2020-02-01"}}
+	current := changelog.Parse(src).Lint(opts)
+	var log bytes.Buffer
+	got, err := forecast(path, dir, opts, current, "2020-02-02", &log, &log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("findings %v, want none; log:\n%s", got, log.String())
+	}
+	if opts.Git.NextTagDay != "2020-02-01" {
+		t.Errorf("the caller's NextTagDay is now %q: the forecast edited the options it was given", opts.Git.NextTagDay)
+	}
+}

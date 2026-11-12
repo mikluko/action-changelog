@@ -7,6 +7,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -94,6 +95,9 @@ func inspect() {
 		Sections:   split(*sections),
 		Severities: severities,
 		Git:        repo.Check,
+		// Which release is due is decided here, and pending-date-mismatch is a
+		// check on a release that would be.
+		DuePrerelease: *duePre,
 	}
 	doc, findings, err := run(*path, opts, os.Stderr, os.Stdout)
 	if err != nil {
@@ -112,7 +116,7 @@ func inspect() {
 		fail(err)
 	}
 	findings = slices.Concat(findings, fragmentFindings, forecastFindings, missing)
-	reason := notDue(doc, repo, *duePre)
+	reason := dueReason(notDue(doc, repo, *duePre), findings)
 	if err := emit(outputs(doc, repo, findings, reason), os.Stdout); err != nil {
 		fail(err)
 	}
@@ -240,11 +244,16 @@ func state(path string, admit git.Eligible) repoState {
 		if shallow {
 			return repoState{Check: &changelog.Git{Err: errors.New("the checkout is shallow and reaches no version tag")}}
 		}
-		return repoState{Check: &changelog.Git{Tags: tagNames(tags), TagDays: tagDays(repo, tags)}, Tags: tags}
+		return repoState{Check: &changelog.Git{Tags: tagNames(tags), TagDays: tagDays(repo, tags), NextTagDay: nextTagDay(repo, tags, path)}, Tags: tags}
 	}
 
 	out := repoState{
-		Check:     &changelog.Git{ReferenceTag: reference.Name, Tags: tagNames(tags), TagDays: tagDays(repo, tags)},
+		Check: &changelog.Git{
+			ReferenceTag: reference.Name,
+			Tags:         tagNames(tags),
+			TagDays:      tagDays(repo, tags),
+			NextTagDay:   nextTagDay(repo, tags, path),
+		},
 		Tags:      tags,
 		Reference: reference.Name,
 	}
@@ -280,6 +289,25 @@ func notDue(doc *changelog.Changelog, repo repoState, prerelease bool) string {
 	}
 	if tagged(repo.Tags, latest.Semver.Canonical().Tag()) {
 		return version + " is already tagged"
+	}
+	return ""
+}
+
+// dueReason is reason, or where it is empty the one sentence of the
+// pending-date-mismatch finding when one was raised: a release dated other than
+// the day its tag would carry is a release whose tag leaves the repository red
+// for good, so it is not due until it is repaired.
+//
+// The finding is read rather than recomputed, so a check switched off holds
+// nothing back: a caller who turned it off asked not to be told.
+func dueReason(reason string, findings []changelog.Finding) string {
+	if reason != "" {
+		return reason
+	}
+	for _, f := range findings {
+		if f.Check == changelog.CheckPendingDateMismatch {
+			return f.Msg
+		}
 	}
 	return ""
 }
@@ -351,6 +379,39 @@ func tagDays(repo *git.Repo, tags []git.Tag) map[string]string {
 		}
 	}
 	return out
+}
+
+// nextTagDay is the day a tag cut on HEAD would carry, or "" where that is not
+// known beforehand, cannot be read, or is not the day to compare. An unreadable
+// HEAD is left out rather than reported, as an unreadable tag's day is: a
+// history that cannot be read at all is already no-git-tags' to report by name.
+//
+// It is "" too where the changelog at path is not the one HEAD records. A tag
+// is cut on a commit, and a file that differs from HEAD's is one that a commit
+// not yet made will carry, as a release folded in from fragments and not yet
+// committed does: HEAD is then not the commit the tag will name, and its day is
+// not the tag's. The comparison is of bytes, the working file against HEAD's
+// blob, so where git converts line endings on checkout (core.autocrlf=true, or
+// eol=crlf in .gitattributes) the two never match and the check stays silent in
+// that checkout.
+func nextTagDay(repo *git.Repo, tags []git.Tag, path string) string {
+	day, known, err := repo.NextDay(tags)
+	if err != nil || !known {
+		return ""
+	}
+	rel, err := repoRelative(repo.Root(), path)
+	if err != nil {
+		return ""
+	}
+	committed, err := repo.HeadFile(rel)
+	if err != nil {
+		return ""
+	}
+	working, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(committed, working) {
+		return ""
+	}
+	return day
 }
 
 // tagNames is every tag as the repository spells it, which is what
