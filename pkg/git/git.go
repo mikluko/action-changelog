@@ -102,7 +102,12 @@ func (r *Repo) tagTime(h plumbing.Hash) (time.Time, error) {
 
 // Repo is a read-only handle on a local repository.
 type Repo struct {
+	// store holds the refs and objects, which a linked worktree shares with the
+	// checkout it was added from.
 	store *filesystem.Storage
+	// local holds HEAD, which is the worktree's own: the same directory as store
+	// in an ordinary checkout, and the worktree's private gitdir in a linked one.
+	local *filesystem.Storage
 	root  string
 }
 
@@ -115,21 +120,29 @@ func (r *Repo) Root() string { return r.root }
 //
 // A .git file is followed to the directory it names, and a linked worktree's
 // commondir is followed from there: tags and objects live in the common
-// directory, and the worktree-local gitdir carries neither.
+// directory, and the worktree-local gitdir carries neither. HEAD is the other
+// way round: it is read from the worktree-local gitdir, because the common
+// directory's HEAD is the main checkout's, and the commits a linked worktree
+// reaches are its own.
 //
 // A git directory that cannot be read is an error, and not a repository whose
 // tags happen to be absent. The caller cannot tell those apart afterwards: an
 // unreadable store yields no references, which is exactly what a repository
 // before its first release yields.
 func Open(dir string) (*Repo, error) {
-	root, dot, err := discover(dir)
+	root, own, dot, err := discover(dir)
 	if err != nil {
 		return nil, err
 	}
-	return &Repo{
+	r := &Repo{
 		store: filesystem.NewStorage(osfs.New(dot), cache.NewObjectLRUDefault()),
 		root:  root,
-	}, nil
+	}
+	r.local = r.store
+	if own != dot {
+		r.local = filesystem.NewStorage(osfs.New(own), cache.NewObjectLRUDefault())
+	}
+	return r, nil
 }
 
 // Shallow reports whether the repository was cloned to a depth, which is what
@@ -279,22 +292,41 @@ func (r *Repo) Reference(tags []Tag, admit Eligible) (Tag, bool, error) {
 
 	rank := r.rank(candidates)
 
-	head, err := storer.ResolveReference(r.store, plumbing.HEAD)
+	head, err := r.head()
 	if err != nil {
 		if errors.Is(err, plumbing.ErrReferenceNotFound) {
 			return Tag{}, false, nil
 		}
 		return Tag{}, false, err
 	}
-	if _, err := object.GetCommit(r.store, head.Hash()); err != nil {
-		return Tag{}, false, fmt.Errorf("HEAD at %s: %w", head.Hash(), err)
+	if _, err := object.GetCommit(r.store, head); err != nil {
+		return Tag{}, false, fmt.Errorf("HEAD at %s: %w", head, err)
 	}
 
-	best := r.best(head.Hash(), rank, len(candidates))
+	best := r.best(head, rank, len(candidates))
 	if best == len(candidates) {
 		return Tag{}, false, nil
 	}
 	return candidates[best], true, nil
+}
+
+// head returns the commit HEAD names, which is the worktree's own HEAD and not
+// the main checkout's, and reports plumbing.ErrReferenceNotFound where it names
+// a branch not yet born.
+//
+// The file is read from the worktree's gitdir and the branch it names is
+// resolved in the common directory, where every worktree's branches live.
+func (r *Repo) head() (plumbing.Hash, error) {
+	ref, err := r.local.Reference(plumbing.HEAD)
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+	if ref.Type() == plumbing.SymbolicReference {
+		if ref, err = storer.ResolveReference(r.store, ref.Target()); err != nil {
+			return plumbing.ZeroHash, err
+		}
+	}
+	return ref.Hash(), nil
 }
 
 // rank maps the commit each candidate names to its index, candidates being
@@ -386,50 +418,52 @@ func Versions(tags []Tag) []Tag {
 }
 
 // discover searches dir and each of its parents for a repository, returning the
-// working tree's top directory and the directory holding its refs and objects.
-func discover(dir string) (root, dot string, err error) {
+// working tree's top directory, the directory holding its own HEAD, and the
+// directory holding its refs and objects. The last two are one directory except
+// in a linked worktree.
+func discover(dir string) (root, own, dot string, err error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	for {
 		candidate := filepath.Join(abs, ".git")
 		if info, err := os.Stat(candidate); err == nil {
-			dot, err := store(candidate, info.IsDir())
+			own, dot, err := store(candidate, info.IsDir())
 			if err != nil {
-				return "", "", err
+				return "", "", "", err
 			}
-			return abs, dot, nil
+			return abs, own, dot, nil
 		}
 		parent := filepath.Dir(abs)
 		if parent == abs {
-			return "", "", fmt.Errorf("no git repository at or above %s", dir)
+			return "", "", "", fmt.Errorf("no git repository at or above %s", dir)
 		}
 		abs = parent
 	}
 }
 
-// store returns the directory holding the tags and objects of the repository
-// whose .git is at candidate: a directory, or a file naming one.
-func store(candidate string, isDir bool) (string, error) {
+// store returns the directory holding the HEAD of the checkout whose .git is at
+// candidate, a directory or a file naming one, and the directory holding the
+// tags and objects it shares with the others.
+func store(candidate string, isDir bool) (own, dot string, err error) {
 	if !isDir {
 		named := candidate
-		var err error
 		if candidate, err = gitdir(named); err != nil {
-			return "", err
+			return "", "", err
 		}
 		if err := readable(candidate, named); err != nil {
-			return "", err
+			return "", "", err
 		}
 	}
-	dot, err := common(candidate)
+	dot, err = common(candidate)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if err := readable(dot, candidate); err != nil {
-		return "", err
+		return "", "", err
 	}
-	return dot, nil
+	return candidate, dot, nil
 }
 
 // readable reports that dir, which named it, is not a directory this process
@@ -503,13 +537,13 @@ type Snapshot struct {
 // reference name or a commit hash is taken as it is. A checkout too shallow to
 // reach the merge base is an error.
 func (r *Repo) MergeBase(base string) (Snapshot, error) {
-	head, err := storer.ResolveReference(r.store, plumbing.HEAD)
+	head, err := r.head()
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("HEAD: %w", err)
 	}
-	ours, err := object.GetCommit(r.store, head.Hash())
+	ours, err := object.GetCommit(r.store, head)
 	if err != nil {
-		return Snapshot{}, fmt.Errorf("HEAD at %s: %w", head.Hash(), err)
+		return Snapshot{}, fmt.Errorf("HEAD at %s: %w", head, err)
 	}
 	h, err := r.resolve(base)
 	if err != nil {
