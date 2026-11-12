@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-12
+
+### Added
+
+- `pending-date-mismatch` check: the newest entry, where no tag names its version,
+  states the day a tag cut on HEAD would carry. `date-mismatch` and
+  `release-entry-modified` leave a release PR merged on a later day than its
+  heading names red for good once it is tagged; this raises it while the entry
+  can still be edited. For a lightweight tag that day is the committer date of
+  HEAD in the offset HEAD records, read by the code that dates an existing tag.
+  It is silent for an annotated tag, dated when it is cut, where the
+  repository has no version tag to say which kind it cuts, and where the
+  changelog differs from HEAD's, as a release folded in from fragments and not
+  yet committed does: the tag is not cut on HEAD then. The `fragments-release`
+  forecast leaves it out for the same reason.
+- `Git.NextTagDay` and `Options.DuePrerelease` in `pkg/changelog`, and
+  `Repo.NextDay` in `pkg/git`.
+
+### Changed
+
+- `due` is `false` while `pending-date-mismatch` fires, and `due-reason` is its
+  message, so a workflow gating its release step on `due` does not cut a tag the
+  changelog would then disagree with. Switch the check off to hold nothing back.
+
 ## [2.0.1] - 2026-11-12
 
 ### Fixed
@@ -389,7 +413,8 @@ recorded separately: nothing consumed them but this repository.
   candidate can be pulled and tested before it merges, and one reaching `main`
   is refused rather than published.
 
-[Unreleased]: https://github.com/mikluko/action-changelog/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/mikluko/action-changelog/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/mikluko/action-changelog/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/mikluko/action-changelog/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/mikluko/action-changelog/compare/v1.6.0...v2.0.0
 [1.6.0]: https://github.com/mikluko/action-changelog/compare/v1.5.0...v1.6.0
