@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-12
+
+### Fixed
+
+- In a linked git worktree, `latest-tag` and the merge base of `missing-fragment`
+  followed the main checkout's HEAD instead of the worktree's own. HEAD is now
+  read from the worktree's own git directory, and refs and objects from the
+  shared one.
+
 ## [2.0.0] - 2026-11-11
 
 ### Added
@@ -380,7 +389,8 @@ recorded separately: nothing consumed them but this repository.
   candidate can be pulled and tested before it merges, and one reaching `main`
   is refused rather than published.
 
-[Unreleased]: https://github.com/mikluko/action-changelog/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/mikluko/action-changelog/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/mikluko/action-changelog/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/mikluko/action-changelog/compare/v1.6.0...v2.0.0
 [1.6.0]: https://github.com/mikluko/action-changelog/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/mikluko/action-changelog/compare/v1.4.0...v1.5.0
