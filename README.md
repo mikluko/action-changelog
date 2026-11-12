@@ -160,6 +160,17 @@ sentence is written to the step summary. It is also `false` where the
 repository's tags cannot be read, because no tag seen is not the same as no tag.
 It says nothing about `valid`: under `fail-on: never` a workflow reads both.
 
+It is also `false` while `pending-date-mismatch` fires, and `due-reason` is that
+check's message. A release PR merged on a later day than its heading names would
+otherwise be tagged anyway, and then `date-mismatch` would ask for the tag's day
+while `release-entry-modified` forbade the edit. The day a tag cut on `HEAD`
+would carry is known only for a lightweight tag, which is dated by the committer
+date of the commit it names, in the offset that commit records. For an annotated
+tag, dated when it is cut, the check is silent, and so is it where the repository
+has no version tag to say which kind it cuts. A repository whose release merged
+late repairs the entry before any tag exists: it opens a pull request dating the
+heading with the day the merge commit will carry, and merges it that day.
+
 ```yaml
 - id: changelog
   uses: mikluko/action-changelog/actions/validate@v2
@@ -210,6 +221,7 @@ annotation, and which is what `error`, `warn` and `off` take.
 | `version-behind-tag` | `error` | The newest entry is not behind the reference tag. |
 | `release-entry-modified` | `error` | A released entry is unchanged since the reference tag. |
 | `prerelease-entry-modified` | `error` | A released pre-release entry is unchanged since the reference tag. |
+| `pending-date-mismatch` | `error` | A release that is due is dated the day a tag cut on HEAD would carry: the newest entry, where no tag names its version, states the committer date of HEAD, in the offset HEAD records, which is the day a lightweight tag cut there carries. While it fires the release is not due. Silent where the day is not known before the tag is cut, which is an annotated tag's, where the repository has no version tag to say which kind it cuts, and for an entry the reference tag has frozen or one stating no date. |
 | `missing-fragment` | `error` | A pull request carries notes: a fragment its merge base with the base branch lacks, or a note the changelog there lacks, which is how a release branch assembling its entry carries them. Silent where no base branch is given, which is outside a pull request, and where no fragments directory is. |
 
 <!-- checks:end -->

@@ -93,11 +93,60 @@ func (r *Repo) tagTime(h plumbing.Hash) (time.Time, error) {
 		}
 		return t.Tagger.When, nil
 	}
+	return r.commitTime(h)
+}
+
+// commitTime is the committer date of the commit h names, in the offset the
+// commit records. It is the one place a lightweight tag's date is read, for a
+// tag that exists and for one that has yet to be cut.
+func (r *Repo) commitTime(h plumbing.Hash) (time.Time, error) {
 	c, err := r.commit(h)
 	if err != nil {
 		return time.Time{}, err
 	}
 	return c.Committer.When, nil
+}
+
+// NextDay is the calendar day a tag cut on HEAD now would carry, as YYYY-MM-DD,
+// and whether that is known before the tag exists.
+//
+// It depends on the kind of tag, which is read from the repository's own
+// version tags, since a repository uses one kind or the other:
+//
+//   - Where every one is lightweight, the day is the committer date of HEAD in
+//     the offset HEAD records, which is what TagDay would answer once a
+//     lightweight tag named it. It is read by the same code, so the two cannot
+//     part.
+//   - Where any is annotated, the day is the tagger date of a tag object not
+//     yet written, which is the moment it is cut in the tagger's zone: neither
+//     is known beforehand, and the answer is not known.
+//   - Where there is no version tag, the kind is not known either, and neither
+//     is the day.
+//
+// An unreadable tag or HEAD is an error, which a caller reads as not known.
+func (r *Repo) NextDay(tags []Tag) (string, bool, error) {
+	versions := Versions(tags)
+	if len(versions) == 0 {
+		return "", false, nil
+	}
+	for _, t := range versions {
+		obj, err := r.store.EncodedObject(plumbing.AnyObject, t.Hash)
+		if err != nil {
+			return "", false, err
+		}
+		if obj.Type() == plumbing.TagObject {
+			return "", false, nil
+		}
+	}
+	head, err := r.head()
+	if err != nil {
+		return "", false, err
+	}
+	when, err := r.commitTime(head)
+	if err != nil {
+		return "", false, err
+	}
+	return when.Format("2006-01-02"), true, nil
 }
 
 // Repo is a read-only handle on a local repository.

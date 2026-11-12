@@ -332,6 +332,18 @@ func gitcmd(t *testing.T, dir string, args ...string) {
 // it; an annotated tag takes the same variable for its tagger.
 func gitcmdAt(t *testing.T, dir, day string, args ...string) {
 	t.Helper()
+	when := ""
+	if day != "" {
+		when = day + "T12:00:00+00:00"
+	}
+	gitcmdWhen(t, dir, when, args...)
+}
+
+// gitcmdWhen is gitcmdAt for a moment of the caller's own, in the offset it
+// writes, which is what a fixture needs to put a commit where its day in UTC and
+// in its own zone differ. An empty when leaves the clock alone.
+func gitcmdWhen(t *testing.T, dir, when string, args ...string) {
+	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
@@ -339,8 +351,7 @@ func gitcmdAt(t *testing.T, dir, day string, args ...string) {
 		"GIT_CONFIG_SYSTEM="+os.DevNull,
 		"GIT_CONFIG_NOSYSTEM=1",
 	)
-	if day != "" {
-		when := day + "T12:00:00+00:00"
+	if when != "" {
 		cmd.Env = append(cmd.Env, "GIT_AUTHOR_DATE="+when, "GIT_COMMITTER_DATE="+when)
 	}
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -606,7 +617,7 @@ func emittedWith(t *testing.T, path string, repo repoState, sev changelog.Severi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := emit(outputs(doc, repo, findings, notDue(doc, repo, false)), &log); err != nil {
+	if err := emit(outputs(doc, repo, findings, dueReason(notDue(doc, repo, false), findings)), &log); err != nil {
 		t.Fatal(err)
 	}
 
@@ -704,4 +715,148 @@ func TestADateThatDisagreesWithItsTagTurnsTheBuildRed(t *testing.T) {
 	if !strings.Contains(log.String(), "2026-01-10") {
 		t.Errorf("the log does not name the day the tag was cut: %s", log.String())
 	}
+}
+
+// pendingFixture is a repository tagged v1.0.0 whose newest commit, made at
+// when, adds an entry for 1.1.0 dated day, and returns the changelog's path.
+// Cut as the second tag kind asks, the tag on 1.0.0 is lightweight or, where
+// annotated is set, an annotated one, since the kind a repository's tags are is
+// what the check reads the day from.
+func pendingFixture(t *testing.T, day, when string, annotated bool) string {
+	t.Helper()
+	dir := fixture(t)
+	path := filepath.Join(dir, "CHANGELOG.md")
+	first := "# Changelog\n\n## [1.0.0] - 2026-01-01\n\n### Added\n\n- the first thing\n"
+	if err := os.WriteFile(path, []byte(first), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitcmd(t, dir, "add", "CHANGELOG.md")
+	gitcmdAt(t, dir, "2026-01-01", "commit", "-m", "1.0.0")
+	if annotated {
+		gitcmdAt(t, dir, "2026-01-01", "tag", "-a", "v1.0.0", "-m", "v1.0.0")
+	} else {
+		gitcmd(t, dir, "tag", "v1.0.0")
+	}
+
+	next := "# Changelog\n\n## [1.1.0] - " + day + "\n\n### Added\n\n- a thing\n\n" +
+		"## [1.0.0] - 2026-01-01\n\n### Added\n\n- the first thing\n"
+	if err := os.WriteFile(path, []byte(next), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitcmd(t, dir, "add", "CHANGELOG.md")
+	gitcmdWhen(t, dir, when, "commit", "-m", "release: 1.1.0")
+	return path
+}
+
+// A release PR merged on a later day than its heading names is tagged anyway,
+// and then date-mismatch asks for the tag's day while release-entry-modified
+// forbids the edit. The one point the entry can still be repaired is before the
+// tag, so the check raises there and the release is not due while it does.
+//
+// A lightweight tag is dated by the committer date of the commit it names, in
+// the offset that commit records, so each case is a commit and the day an entry
+// would have to carry for it: the entry's day behind and ahead of the commit's,
+// in UTC and in offsets where the commit's day and its UTC day differ.
+func TestADateOtherThanTheDayATagWouldCarryHoldsTheReleaseBack(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		when string
+		day  string
+		fire bool
+	}{
+		// Noon UTC on 2026-03-02: one day in every reading.
+		{"UTC, the entry on the commit's day", "2026-03-02T12:00:00+00:00", "2026-03-02", false},
+		{"UTC, the entry a day behind", "2026-03-02T12:00:00+00:00", "2026-03-01", true},
+		{"UTC, the entry a day ahead", "2026-03-02T12:00:00+00:00", "2026-03-03", true},
+		// 23:30 on 2026-03-01 at -07:00 is 06:30 UTC on 2026-03-02: the tag
+		// carries the 1st, and the entry written with UTC's day is ahead of it.
+		{"-07:00, the entry on the commit's own day", "2026-03-01T23:30:00-07:00", "2026-03-01", false},
+		{"-07:00, the entry on the UTC day, ahead", "2026-03-01T23:30:00-07:00", "2026-03-02", true},
+		{"-07:00, the entry behind", "2026-03-01T23:30:00-07:00", "2026-02-28", true},
+		// 00:30 on 2026-03-02 at +09:00 is 15:30 UTC on 2026-03-01: the tag
+		// carries the 2nd, and the entry written with UTC's day is behind it.
+		{"+09:00, the entry on the commit's own day", "2026-03-02T00:30:00+09:00", "2026-03-02", false},
+		{"+09:00, the entry on the UTC day, behind", "2026-03-02T00:30:00+09:00", "2026-03-01", true},
+		{"+09:00, the entry ahead", "2026-03-02T00:30:00+09:00", "2026-03-03", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			findings, reason := pendingOutcome(t, pendingFixture(t, tc.day, tc.when, false))
+			if tc.fire {
+				wantHeldBack(t, findings, reason, tc.day)
+			} else if len(findings) != 0 || reason != "" {
+				t.Fatalf("findings %v and reason %q, want none: the entry carries the day the tag would", findings, reason)
+			}
+		})
+	}
+}
+
+// wantHeldBack holds a run to the one finding of the date check, at error, and
+// to the release being not due for the sentence it gives.
+func wantHeldBack(t *testing.T, findings []changelog.Finding, reason, day string) {
+	t.Helper()
+	if len(findings) != 1 || findings[0].Check != changelog.CheckPendingDateMismatch || findings[0].Severity != changelog.Error {
+		t.Fatalf("findings %v, want one %s at error", findings, changelog.CheckPendingDateMismatch)
+	}
+	if !red(findings, changelog.Error) || valid(findings) {
+		t.Error("the finding did not turn the build red")
+	}
+	if reason != findings[0].Msg || !strings.Contains(reason, day) {
+		t.Errorf("due-reason is %q, want the finding's sentence %q, naming the entry's day %s", reason, findings[0].Msg, day)
+	}
+}
+
+// pendingOutcome is what a run over the changelog at path finds and gives as
+// the reason a release is not due.
+func pendingOutcome(t *testing.T, path string) ([]changelog.Finding, string) {
+	t.Helper()
+	repo := state(path, git.Final)
+	var log bytes.Buffer
+	doc, findings, err := run(path, changelog.Options{Git: repo.Check}, &log, &log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return findings, dueReason(notDue(doc, repo, false), findings)
+}
+
+// due is read end to end the way a gating workflow reads it, and a check the
+// caller switched off holds nothing back.
+func TestDueIsFalseWhileTheDateCheckFires(t *testing.T) {
+	path := pendingFixture(t, "2026-03-01", "2026-03-02T12:00:00+00:00", false)
+	repo := state(path, git.Final)
+
+	out := emitted(t, path, repo)
+	if out["due"] != "false" || !strings.Contains(out["due-reason"], "2026-03-02") {
+		t.Errorf("due=%q due-reason=%q, want false and a sentence naming 2026-03-02", out["due"], out["due-reason"])
+	}
+
+	off := changelog.DefaultSeverities()
+	off[changelog.CheckPendingDateMismatch] = changelog.Off
+	out = emittedWith(t, path, repo, off)
+	if out["due"] != "true" || out["due-reason"] != "" {
+		t.Errorf("with the check off, due=%q due-reason=%q, want true and none", out["due"], out["due-reason"])
+	}
+}
+
+// There is no remedy to ask for where the day is not known before the tag is
+// cut. An annotated tag is dated when it is cut, in the tagger's zone, and a
+// repository with no version tag has not said which kind it cuts.
+func TestTheDateCheckIsSilentWhereTheTagDayIsNotKnownBeforehand(t *testing.T) {
+	t.Run("annotated tags", func(t *testing.T) {
+		path := pendingFixture(t, "2026-03-01", "2026-03-02T12:00:00+00:00", true)
+		if out := emitted(t, path, state(path, git.Final)); out["due"] != "true" || out["valid"] != "true" {
+			t.Errorf("due=%q valid=%q, want both true: %v", out["due"], out["valid"], out)
+		}
+	})
+	t.Run("no version tag", func(t *testing.T) {
+		dir := fixture(t)
+		path := filepath.Join(dir, "CHANGELOG.md")
+		if err := os.WriteFile(path, []byte("# Changelog\n\n## [1.0.0] - 2026-03-01\n\n### Added\n\n- a thing\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		gitcmd(t, dir, "add", "CHANGELOG.md")
+		gitcmdAt(t, dir, "2026-03-02", "commit", "-m", "1.0.0")
+		if out := emitted(t, path, state(path, git.Final)); out["due"] != "true" || out["valid"] != "true" {
+			t.Errorf("due=%q valid=%q, want both true: %v", out["due"], out["valid"], out)
+		}
+	})
 }

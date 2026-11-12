@@ -654,3 +654,75 @@ func TestMergeBaseReadsTheForkPoint(t *testing.T) {
 		t.Error("no error for a base that names nothing")
 	}
 }
+
+func nextDay(t *testing.T, dir string) (string, bool) {
+	t.Helper()
+	r, tags := open(t, dir)
+	day, known, err := r.NextDay(tags)
+	if err != nil {
+		t.Fatalf("NextDay: %v", err)
+	}
+	return day, known
+}
+
+// The day a lightweight tag cut on HEAD would carry is the one TagDay reads off
+// a lightweight tag cut there, committer date in the commit's own offset, so the
+// two are held equal on commits whose day in UTC differs from their own.
+func TestNextDayIsTheDayALightweightTagOnHeadWouldCarry(t *testing.T) {
+	for _, tc := range []struct{ name, when, want string }{
+		{"UTC", "2026-03-02T12:00:00+00:00", "2026-03-02"},
+		// 06:30 UTC on the 2nd.
+		{"-07:00", "2026-03-01T23:30:00-07:00", "2026-03-01"},
+		// 15:30 UTC on the 1st.
+		{"+09:00", "2026-03-02T00:30:00+09:00", "2026-03-02"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := repo(t)
+			write(t, dir, "f", "one")
+			run(t, dir, "add", "f")
+			runAt(t, dir, "2026-01-01T12:00:00+00:00", "commit", "-m", "one")
+			run(t, dir, "tag", "v1.0.0")
+			write(t, dir, "f", "two")
+			run(t, dir, "add", "f")
+			runAt(t, dir, tc.when, "commit", "-m", "two")
+
+			got, known := nextDay(t, dir)
+			if !known || got != tc.want {
+				t.Fatalf("NextDay is %q, %v; want %q, true", got, known, tc.want)
+			}
+
+			run(t, dir, "tag", "v1.1.0")
+			r, tags := open(t, dir)
+			if cut := day(t, r, tags, "v1.1.0"); cut != got {
+				t.Errorf("the tag cut there carries %q, which NextDay did not predict: %q", cut, got)
+			}
+		})
+	}
+}
+
+// An annotated tag takes the moment it is cut and the tagger's zone, neither of
+// which exists yet; a repository with no version tag has not said which kind it
+// cuts. Neither has a day to give, and a tag that names no version says nothing.
+func TestNextDayIsNotKnownBeforeAnAnnotatedTagIsCut(t *testing.T) {
+	dir := repo(t)
+	write(t, dir, "f", "one")
+	run(t, dir, "add", "f")
+	runAt(t, dir, "2026-01-01T12:00:00+00:00", "commit", "-m", "one")
+
+	if day, known := nextDay(t, dir); known {
+		t.Errorf("NextDay is %q with no tag at all, want it not known", day)
+	}
+	run(t, dir, "tag", "not-a-version")
+	if day, known := nextDay(t, dir); known {
+		t.Errorf("NextDay is %q with no version tag, want it not known", day)
+	}
+
+	run(t, dir, "tag", "v1.0.0")
+	if _, known := nextDay(t, dir); !known {
+		t.Fatal("NextDay is not known beside a lightweight version tag")
+	}
+	runAt(t, dir, "2026-01-02T12:00:00+00:00", "tag", "-a", "v1.1.0", "-m", "v1.1.0")
+	if day, known := nextDay(t, dir); known {
+		t.Errorf("NextDay is %q beside an annotated version tag, want it not known", day)
+	}
+}
