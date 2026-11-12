@@ -390,7 +390,10 @@ func tagDays(repo *git.Repo, tags []git.Tag) map[string]string {
 // is cut on a commit, and a file that differs from HEAD's is one that a commit
 // not yet made will carry, as a release folded in from fragments and not yet
 // committed does: HEAD is then not the commit the tag will name, and its day is
-// not the tag's.
+// not the tag's. The comparison is of bytes, the working file against HEAD's
+// blob, so where git converts line endings on checkout (core.autocrlf=true, or
+// eol=crlf in .gitattributes) the two never match and the check stays silent in
+// that checkout.
 func nextTagDay(repo *git.Repo, tags []git.Tag, path string) string {
 	day, known, err := repo.NextDay(tags)
 	if err != nil || !known {
