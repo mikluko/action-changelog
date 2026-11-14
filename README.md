@@ -580,6 +580,12 @@ The Go packages the command is built on are importable:
 document, and `sarak.sh/mikluko/changelog/v2/pkg/semver` and
 `sarak.sh/mikluko/changelog/v2/pkg/git` read versions and a repository's tags.
 
+## Agent skill
+
+[`skills/changelog/`](skills/changelog/SKILL.md) is an agent skill for writing
+a changelog this tool checks: entries, fragments, cutting a version. It is
+versioned with the tool, so the skill at a tag describes the tool at that tag.
+
 ## Releasing
 
 This repository releases itself with its own action, which is the shortest
