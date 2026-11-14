@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-14
+
+### Added
+
+- `skills/changelog/`: an agent skill for writing a changelog in the shape this tool checks, versioned with it.
+
 ## [2.1.0] - 2026-11-12
 
 ### Added
@@ -413,7 +419,8 @@ recorded separately: nothing consumed them but this repository.
   candidate can be pulled and tested before it merges, and one reaching `main`
   is refused rather than published.
 
-[Unreleased]: https://github.com/mikluko/action-changelog/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/mikluko/action-changelog/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/mikluko/action-changelog/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/mikluko/action-changelog/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/mikluko/action-changelog/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/mikluko/action-changelog/compare/v1.6.0...v2.0.0
