@@ -17,7 +17,7 @@ import (
 // The two references a workflow resolves this action by: the GitHub mirror,
 // and the Forgejo repository it is developed in.
 const (
-	action        = "mikluko/action-changelog/actions/validate@"
+	action        = "mikluko/changelog/actions/validate@"
 	forgejoAction = "https://sarak.sh/mikluko/changelog/actions/validate@"
 )
 
@@ -25,8 +25,8 @@ const (
 // the root and each writer in its subdirectory, under either name.
 var actions = []string{
 	action, forgejoAction,
-	"mikluko/action-changelog/actions/append@", "https://sarak.sh/mikluko/changelog/actions/append@",
-	"mikluko/action-changelog/actions/release@", "https://sarak.sh/mikluko/changelog/actions/release@",
+	"mikluko/changelog/actions/append@", "https://sarak.sh/mikluko/changelog/actions/append@",
+	"mikluko/changelog/actions/release@", "https://sarak.sh/mikluko/changelog/actions/release@",
 }
 
 // actionFile is the part of action.yaml the tests hold to the code.

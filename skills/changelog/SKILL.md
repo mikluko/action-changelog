@@ -190,7 +190,7 @@ fragments: its notes go under `[Unreleased]`.
 A repository whose notes live in `CHANGELOG.md` says so in its `validate` step:
 
 ```yaml
-- uses: mikluko/action-changelog/actions/validate@v2
+- uses: mikluko/changelog/actions/validate@v2
   with:
     fragments: ""
 ```

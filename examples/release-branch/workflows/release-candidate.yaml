@@ -35,7 +35,7 @@ jobs:
         with:
           fetch-depth: 0
       - id: changelog
-        uses: mikluko/action-changelog/actions/validate@v2
+        uses: mikluko/changelog/actions/validate@v2
         with:
           sections: Added,Changed,Deprecated,Removed,Fixed,Security,Breaking
           error: prerelease-entry

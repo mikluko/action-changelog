@@ -27,7 +27,7 @@ asset="changelog_${os}_${arch}"
 # Both forges carry every release. Each runner asks its own first, and the
 # other covers one that is unreachable or has not received the release yet.
 forgejo="https://sarak.sh/mikluko/changelog/releases/download/v$VERSION"
-github="https://github.com/mikluko/action-changelog/releases/download/v$VERSION"
+github="https://github.com/mikluko/changelog/releases/download/v$VERSION"
 if [ "$GITHUB_SERVER_URL" = https://github.com ]; then
   sources=("$github" "$forgejo")
 else

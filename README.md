@@ -1,4 +1,4 @@
-# action-changelog
+# changelog
 
 Reads a [Keep a Changelog](https://keepachangelog.com/en/2.0.0/) document and
 reports where it departs from the format. Each finding is emitted as a workflow
@@ -10,7 +10,7 @@ annotation, so a failing check lands on the offending line of the diff.
 - uses: actions/checkout@v5
   with:
     fetch-depth: 0
-- uses: mikluko/action-changelog/actions/validate@v2
+- uses: mikluko/changelog/actions/validate@v2
   with:
     changelog: CHANGELOG.md
 ```
@@ -26,8 +26,11 @@ On Forgejo the same step names the action by its full URL:
 
 The action is developed at
 [sarak.sh/mikluko/changelog](https://sarak.sh/mikluko/changelog),
-and [`mikluko/action-changelog`](https://github.com/mikluko/action-changelog) on
+and [`mikluko/changelog`](https://github.com/mikluko/changelog) on
 GitHub is its mirror, carrying the same tags and releases.
+[`mikluko/action-changelog`](https://github.com/mikluko/action-changelog), the
+name the GitHub mirror had before, receives the same tags and releases too, so
+a workflow naming it keeps resolving.
 
 Each action lives in a directory of its own under `actions/`: `validate` reads
 the changelog, and [`append` and `release`](#writing-the-changelog) write it.
@@ -175,7 +178,7 @@ heading with the day the merge commit will carry, and merges it that day.
 
 ```yaml
 - id: changelog
-  uses: mikluko/action-changelog/actions/validate@v2
+  uses: mikluko/changelog/actions/validate@v2
 - if: steps.changelog.outputs.due == 'true'
   env:
     VERSION: ${{ steps.changelog.outputs.version }}
@@ -384,7 +387,7 @@ workflow's to do. Every byte outside the lines they write is preserved.
 Adds a note under a section of the `[Unreleased]` entry:
 
 ```yaml
-- uses: mikluko/action-changelog/actions/append@v2
+- uses: mikluko/changelog/actions/append@v2
   with:
     section: Fixed
     note: The parser no longer reads a fenced heading as an entry.
@@ -407,7 +410,7 @@ Turns the `[Unreleased]` entry into a versioned one and opens a new, empty
 `[Unreleased]` above it:
 
 ```yaml
-- uses: mikluko/action-changelog/actions/release@v2
+- uses: mikluko/changelog/actions/release@v2
   id: release
 ```
 
@@ -486,7 +489,7 @@ repository writing its notes into `CHANGELOG.md` rather than into fragments sets
 `fragments` empty, which silences all four:
 
 ```yaml
-- uses: mikluko/action-changelog/actions/validate@v2
+- uses: mikluko/changelog/actions/validate@v2
   with:
     fragments: ""
 ```
@@ -495,7 +498,7 @@ The release action folds every fragment into `[Unreleased]` as `append` would
 one note at a time, releases the result, and deletes the fragments it folded:
 
 ```yaml
-- uses: mikluko/action-changelog/actions/release@v2
+- uses: mikluko/changelog/actions/release@v2
 ```
 
 One fragment it cannot read refuses the release with nothing written. A
@@ -524,9 +527,9 @@ in full.
 
 | 1.x | 2.x |
 |---|---|
-| `mikluko/action-changelog@v1` | `mikluko/action-changelog/actions/validate@v2` |
-| `mikluko/action-changelog/append@v1` | `mikluko/action-changelog/actions/append@v2` |
-| `mikluko/action-changelog/release@v1` | `mikluko/action-changelog/actions/release@v2` |
+| `mikluko/action-changelog@v1` | `mikluko/changelog/actions/validate@v2` |
+| `mikluko/action-changelog/append@v1` | `mikluko/changelog/actions/append@v2` |
+| `mikluko/action-changelog/release@v1` | `mikluko/changelog/actions/release@v2` |
 | `https://sarak.sh/mikluko/changelog@v1` | `https://sarak.sh/mikluko/changelog/actions/validate@v2` |
 | `sarak.sh/mikluko/changelog` | `sarak.sh/mikluko/changelog/v2` |
 

@@ -1,0 +1,24 @@
+name: CI
+
+# The mirror receives main after Forgejo's CI has gated it, so this runs the
+# build and the tests on GitHub's runners and gates nothing. Forgejo runs only
+# .forgejo/workflows while that directory exists, so this file runs on GitHub
+# alone.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
